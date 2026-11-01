@@ -19,7 +19,7 @@
 # SPDX document and would silently report nothing.
 #
 # Each image is pulled once and scanned from the local daemon, so a run costs
-# one Docker Hub pull per upstream image rather than one per tool.
+# one pull per image rather than one per tool.
 #
 # Expects $REPO (our image repository), $GRYPE, $SYFT and $TRIVY (commands),
 # and optionally $HISTORY_URL and $UPSTREAM_REPO (a mirror of the official

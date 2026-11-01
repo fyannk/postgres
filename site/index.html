@@ -108,8 +108,9 @@
           <li>
             <strong>Same inventory tool on both sides.</strong> Each image we
             publish carries an SPDX SBOM produced by Syft at build time. For
-            upstream's image, Syft is run on the official image from Docker Hub
-            each night. Only <code>linux/amd64</code> is compared, the platform
+            upstream's image, Syft is run on the official image each night,
+            pulled through <code>mirror.gcr.io</code>, Google's mirror of Docker
+            Hub, which serves the same digests. Only <code>linux/amd64</code> is compared, the platform
             published here.
           </li>
           <li>

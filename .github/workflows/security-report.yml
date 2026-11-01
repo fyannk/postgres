@@ -26,7 +26,11 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  # Docker Hub images are pulled through Google's mirror, which serves the
+  # same digests without touching Docker Hub's rate limits; the account's
+  # Docker Hub requests are left to the publish.
+  TRIVY_IMAGE: mirror.gcr.io/aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  UPSTREAM_REPO: mirror.gcr.io/library/postgres
 
 jobs:
   scan:
@@ -37,23 +41,8 @@ jobs:
       contents: read
       packages: read
       pages: read
-    env:
-      # Optional: an authenticated Docker Hub pull is not subject to the
-      # anonymous rate limit. Without these secrets the run pulls anonymously
-      # and reports any upstream image it cannot fetch as unavailable.
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      # First, so every Docker Hub pull below, the Trivy image included, is
-      # authenticated when the secrets are set.
-      - name: Login to Docker Hub
-        if: env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
-        with:
-          username: ${{ env.DOCKERHUB_USERNAME }}
-          password: ${{ env.DOCKERHUB_TOKEN }}
 
       - name: Install grype
         id: grype

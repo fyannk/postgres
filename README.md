@@ -133,9 +133,10 @@ The data and our SBOMs are published alongside the page.
 
 [`security-report.yml`](.github/workflows/security-report.yml) runs after the
 nightly publish and on changes to [`site/`](site) or
-[`security-report.sh`](.github/scripts/security-report.sh). Docker Hub's
-anonymous pull limit can leave an upstream image unscanned for a night; setting
-the optional `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets avoids that.
+[`security-report.sh`](.github/scripts/security-report.sh). Upstream's images
+and the Trivy image are pulled through `mirror.gcr.io`, Google's mirror of
+Docker Hub, which serves the same digests without touching Docker Hub's rate
+limits.
 
 ## Release automation
 
