@@ -169,17 +169,23 @@ jq -s --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg revision "${revisio
 # reads at a glance. Today's row replaces an earlier run of the same day.
 # Only a 404 (the first deployment) starts it afresh: any other failure stops
 # the run, since publishing would overwrite the accumulated history.
-history="[]"
+# The history stays in a file: a year of it is larger than a single command
+# line argument may be.
+history="${work}/history.json"
+echo '[]' > "${history}"
 if [[ -n "${HISTORY_URL:-}" ]]; then
-  status="$(curl -sSL -o "${work}/history.json" -w '%{http_code}' "${HISTORY_URL}")"
+  status="$(curl -sSL -o "${history}" -w '%{http_code}' "${HISTORY_URL}")"
   case "${status}" in
     200)
-      if ! history="$(jq -ce 'if type == "array" then . else error("not an array") end' "${work}/history.json")"; then
+      if ! jq -e 'type == "array"' "${history}" >/dev/null; then
         echo "${HISTORY_URL} is not a valid history; not publishing over it" >&2
         exit 1
       fi
       ;;
-    404) echo "No history at ${HISTORY_URL} yet; starting one." ;;
+    404)
+      echo "No history at ${HISTORY_URL} yet; starting one."
+      echo '[]' > "${history}"
+      ;;
     *)
       echo "Fetching ${HISTORY_URL} failed with HTTP ${status}; not publishing over the history" >&2
       exit 1
@@ -188,7 +194,7 @@ if [[ -n "${HISTORY_URL:-}" ]]; then
 fi
 # Totals count only images scanned on both sides with that scanner, as the
 # page's tiles do, so one side failing a night does not skew the comparison.
-jq --argjson history "${history}" '
+jq --slurpfile history "${history}" '
   def totals($side; $scanner): [.images[]
       | select(.ours.scans[$scanner] and .upstream.scans[$scanner])
       | .[$side].scans[$scanner]]
@@ -196,7 +202,7 @@ jq --argjson history "${history}" '
        critical: (map(.severity.critical) | add // 0), high: (map(.severity.high) | add // 0),
        images: length};
   (.generated[0:10]) as $date
-  | ($history | map(select(.date != $date)))
+  | ($history[0] | map(select(.date != $date)))
     + [{date: $date,
         ours: {grype: totals("ours"; "grype"), trivy: totals("ours"; "trivy")},
         upstream: {grype: totals("upstream"; "grype"), trivy: totals("upstream"; "trivy")}}]
