@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light dark">
   <link rel="icon" href="data:,">
-  <title>PostgreSQL without gosu: security report</title>
-  <meta name="description" content="The official PostgreSQL image rebuilt without gosu, scanned nightly next to upstream with grype and Trivy.">
+  <title>Secured PostgreSQL images</title>
+  <meta name="description" content="The official PostgreSQL image kept as close to zero known, fixable vulnerabilities as possible, and scanned nightly next to upstream with grype and Trivy.">
   <link rel="preload" href="fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="tokens.css">
   <link rel="stylesheet" href="style.css">
@@ -15,42 +15,58 @@
 <body>
   <header class="page-head">
     <p class="eyebrow"><a class="wordmark" href="https://github.com/fyannk">fyannk</a><a class="repo" href="https://github.com/fyannk/postgres">fyannk/postgres</a></p>
-    <h1>PostgreSQL images without gosu</h1>
+    <h1>Secured PostgreSQL images</h1>
     <p class="lede">
-      The official PostgreSQL image, rebuilt from upstream's own recipe with a
-      single change: the step-down from root to <code>postgres</code> uses the
-      distribution's <code>setpriv</code> instead of a bundled
-      <code>gosu</code> binary. Every night, both images are scanned side by
-      side with two scanners, and this page shows the result.
+      The official PostgreSQL image, kept as close to zero known, fixable
+      vulnerabilities as it can be, and measured in the open. Every night,
+      each image is scanned next to its official counterpart with two
+      scanners, and this page shows the result, including what is left.
     </p>
     <p class="meta" id="meta">Loading the latest scan…</p>
   </header>
 
   <main>
     <section aria-labelledby="why-title">
-      <h2 id="why-title">Why repackage</h2>
+      <h2 id="why-title">How the images stay patched</h2>
       <div class="prose">
         <p>
-          The official image ships <a href="https://github.com/tianon/gosu">gosu</a>
-          for one job: dropping from root to <code>postgres</code> once, at
-          startup. gosu is a separate Go program, downloaded at build time and
-          pinned to a release, and it carries the Go standard library it was
-          compiled with. Every vulnerability later found in that toolchain is
-          reported against every image that bundles it, and it stays there until
-          gosu is rebuilt and upstream moves to the new release. Distribution
-          updates cannot fix it.
+          Most findings in a container image are not in PostgreSQL. They are in
+          the distribution packages around it and in anything bundled on top.
+          Four things keep them down here.
         </p>
+        <ul>
+          <li>
+            <strong>Rebuilt when a fix lands.</strong> An image is rebuilt
+            whenever upstream's recipe or the Debian or Alpine base image
+            changes, and at least once a week regardless, so distribution
+            security updates reach it without waiting for the next release.
+          </li>
+          <li>
+            <strong>Nothing bundled that the distribution cannot patch.</strong>
+            The official image downloads <a href="https://github.com/tianon/gosu">gosu</a>,
+            a Go program, only to drop from root to <code>postgres</code> at
+            startup. It carries the Go standard library it was compiled with, so
+            every Go advisory published since stays in the image until gosu is
+            rebuilt, and distribution updates cannot reach it. Here the same step
+            is done by <code>setpriv</code>, part of the distribution's
+            <code>util-linux</code> and patched like the rest. It is the only
+            change made to upstream's recipe.
+          </li>
+          <li>
+            <strong>Checked before it ships.</strong> Every change is built,
+            started and scanned before it is merged, and one that introduces a
+            critical finding with an available fix is blocked.
+          </li>
+          <li>
+            <strong>Measured, not claimed.</strong> Each published image comes
+            with its SBOM, and the comparison below is regenerated every night
+            from public data, with every remaining finding listed.
+          </li>
+        </ul>
         <p>
-          <code>setpriv</code> does the same job and already comes with the
-          distribution: on Debian it is part of <code>util-linux</code>, which
-          every image contains anyway, and on Alpine it is a small package. It is
-          patched through the normal package updates that the nightly rebuild
-          picks up.
-        </p>
-        <p>
-          Nothing else changes. The Dockerfile, entrypoint, environment
-          variables, init scripts and tags are upstream's, so switching is a
-          matter of changing the registry prefix:
+          The Dockerfile, entrypoint, environment variables, init scripts and
+          tags are otherwise upstream's, so switching is a matter of changing
+          the registry prefix:
         </p>
         <pre><code>docker pull ghcr.io/fyannk/postgres:18</code></pre>
       </div>
