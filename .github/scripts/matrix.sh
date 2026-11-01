@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Print the build matrix for a docker-library/postgres checkout as a compact
-# JSON array, one entry per <major>/<variant> directory:
+# JSON array, one entry per <major>/<variant> directory. Only each major's
+# current Debian and Alpine releases (upstream's .debian and .alpine) are kept;
+# older bases such as bookworm or a superseded Alpine are not built:
 #
 #   {"dir":"18/trixie","major":"18","version":"18.6","variant":"trixie",
 #    "base":"debian:trixie-slim","tags":"18.6-trixie 18-trixie 18.6 18 trixie latest"}
@@ -22,6 +24,7 @@ entries="$(jq -c '
      | .key | tonumber ] | max | tostring) as $newest
   | [ to_entries[] | .key as $major | .value as $v
       | $v.variants[] as $variant
+      | select($variant == $v.debian or $variant == "alpine\($v.alpine)")
       | ($v.version) as $version
       | ($major == $newest) as $isNewest
       | {
