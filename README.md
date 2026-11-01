@@ -76,7 +76,10 @@ change:
 | `<version>-alpine`, `<major>-alpine` | `18-alpine` | The default Alpine base |
 | `<variant>`, `latest`, `alpine` | `trixie`, `latest` | Newest stable major |
 
-Every major and variant upstream maintains is built, pre-releases included.
+Every major upstream maintains is built, pre-releases included, on its
+current Debian and Alpine releases (upstream's default `debian` and `alpine`
+for that major). Older bases such as `bookworm` or a superseded Alpine release
+are not built, so their tags stop updating when upstream moves on.
 Pre-releases never take `latest` or the bare variant tags.
 
 ```text
@@ -114,10 +117,11 @@ result:
   down;
 - `docker-ensure-initdb.sh` steps down and initialises a cluster.
 
-Each image is also scanned with grype. The gate blocks on critical findings
-with an applicable fix that the change introduces; one already in the
-published image is tracked by a nightly-updated issue, and everything else is
-published to the repository's code scanning results rather than ignored. See
+Each image is also scanned with grype, including the Go standard library of
+any Go binary (grype skips that by default). The gate blocks on critical
+findings with an applicable fix that the change introduces; one already in the
+published image is tracked by a nightly-updated issue, and every other finding
+with a fix is published to the repository's code scanning results. See
 [SECURITY.md](SECURITY.md).
 
 ## Release automation
@@ -125,7 +129,8 @@ published to the repository's code scanning results rather than ignored. See
 The nightly publish fetches upstream's default branch, patches every variant
 up front (if any fails, nothing is published), then builds each variant, runs
 the same checks as CI against the built image, and only then pushes it with
-SBOM and provenance attestations.
+SBOM and provenance attestations. The push reuses the checked build's layers,
+and the workflow fails if the pushed layers differ from the checked ones.
 
 An image is rebuilt only when an input that can change its contents has moved:
 upstream's directory for that variant, the patch script, or the base image

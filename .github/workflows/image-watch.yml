@@ -38,6 +38,7 @@ jobs:
       - name: Open, update or close the tracking issue
         env:
           GRYPE: ${{ steps.grype.outputs.cmd }}
+          GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB: "true"
           REPO: ghcr.io/${{ github.repository_owner }}/postgres
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
