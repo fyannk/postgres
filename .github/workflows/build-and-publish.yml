@@ -109,16 +109,32 @@ jobs:
           # rebuild when an input that actually changes the image has moved:
           # upstream's recipe for this one directory, the patch applied to it,
           # or the base image.
+          # Each input is resolved on its own so a failed lookup fails the step
+          # instead of leaving an empty value in the fingerprint.
+          recipe="$(git -C upstream rev-parse "HEAD:${DIR}")"
+          patch="$(sha256sum .github/scripts/patch-upstream.sh | cut -d' ' -f1)"
           # The base digest is read where the build pulls it from: the mirror
-          # for an official image, which serves the same digest as Docker Hub.
+          # for an official image, which serves the same digest as Docker Hub,
+          # with Docker Hub itself as the fallback, as the builder does.
           case "${BASE}" in
-            */*) base_ref="${BASE}" ;;
-            *) base_ref="mirror.gcr.io/library/${BASE}" ;;
+            */*) base_refs=("${BASE}") ;;
+            *) base_refs=("mirror.gcr.io/library/${BASE}" "${BASE}") ;;
           esac
+          base_digest=""
+          for ref in "${base_refs[@]}"; do
+            base_digest="$(docker buildx imagetools inspect "${ref}" --format '{{.Manifest.Digest}}' 2>/dev/null || true)"
+            if [[ "${base_digest}" == sha256:* ]]; then break; fi
+            echo "::warning::Could not resolve ${ref}"
+            base_digest=""
+          done
+          if [[ -z "${base_digest}" ]]; then
+            echo "::error::Could not resolve the base image ${BASE} from ${base_refs[*]}"
+            exit 1
+          fi
           {
-            echo "recipe=$(git -C upstream rev-parse "HEAD:${DIR}")"
-            echo "patch=$(sha256sum .github/scripts/patch-upstream.sh | cut -d' ' -f1)"
-            echo "base=${BASE}@$(docker buildx imagetools inspect "${base_ref}" --format '{{.Manifest.Digest}}')"
+            echo "recipe=${recipe}"
+            echo "patch=${patch}"
+            echo "base=${BASE}@${base_digest}"
           } | tee /tmp/build-inputs.txt
           fingerprint="$(sha256sum /tmp/build-inputs.txt | cut -d' ' -f1)"
           echo "fingerprint=${fingerprint}" >> "${GITHUB_OUTPUT}"
@@ -305,7 +321,8 @@ jobs:
       - name: Mirror the tags
         if: env.HUB_ENABLED == 'true'
         env:
-          MATRIX: ${{ needs.detect.outputs.matrix }}
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           OWNER: ${{ github.repository_owner }}
         run: .github/scripts/sync-dockerhub.sh "ghcr.io/${OWNER}/${IMAGE_NAME}" "${OWNER}/${IMAGE_NAME}"
 
