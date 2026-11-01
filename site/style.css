@@ -36,10 +36,12 @@ html {
   accent-color: var(--ours);
 }
 
-/* Fluid: data uses the whole screen; running text keeps a readable measure
-   on its own. */
+/* Breakpoints: phone below 40rem, tablet and up from 40rem. The page is
+   fluid up to an 80rem column; every data block takes that full width, one
+   below the other, and running text keeps its own 60rem measure. */
 body {
   margin: 0 auto;
+  max-width: 80rem;
   padding: clamp(1.5rem, 3vw, 3rem) clamp(1rem, 3vw, 3rem) 4rem;
 }
 
@@ -55,7 +57,16 @@ pre {
 
 h1, h2, h3, h4 { font-family: var(--mono); font-weight: 600; letter-spacing: -0.01em; }
 h1 { font-size: clamp(var(--fy-text-2xl), 4vw, var(--fy-text-3xl)); line-height: 1.15; margin: var(--fy-space-4) 0 var(--fy-space-4); }
-h2 { font-size: var(--fy-text-xl); margin: var(--fy-space-12) 0 var(--fy-space-4); }
+h2 { font-size: var(--fy-text-xl); margin: 0 0 var(--fy-space-3); }
+
+/* Sections are set apart by a rule and generous space; inside, one rhythm. */
+main > section {
+  margin-top: var(--fy-space-12);
+  padding-top: var(--fy-space-8);
+  border-top: 1px solid var(--border);
+}
+main > section > p.muted { margin: 0 0 var(--fy-space-6); max-width: 60rem; }
+.prose > p { margin: 0 0 var(--fy-space-4); }
 h3 { font-size: var(--fy-text-md); margin: 0; }
 
 /* Wordmark: Plex Mono 600 with the accent block cursor. */
@@ -75,7 +86,7 @@ h3 { font-size: var(--fy-text-md); margin: 0; }
 /* Lists of points tile as cards across the width. */
 .points {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  grid-template-columns: 1fr;
   gap: var(--fy-space-3);
   list-style: none;
   padding: 0;
@@ -283,7 +294,7 @@ td.wrap { white-space: normal; }
 /* Image cards: as many columns as fit, each table sized by its card. */
 .image-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 32rem), 1fr));
+  grid-template-columns: 1fr;
   gap: var(--fy-space-3);
 }
 .image-card { margin: 0; padding: var(--fy-space-4); container-type: inline-size; }
@@ -295,7 +306,7 @@ td.wrap { white-space: normal; }
 .severity-table th.sev, .severity-table td.sev { text-align: center; }
 .severity-table tbody + tbody { border-top: 1px solid var(--axis); }
 .severity-table tr.side th { padding-top: var(--fy-space-2); border-bottom: 0; }
-.severity-table .sq { width: 100%; min-width: 0; padding-inline: 2px; }
+.severity-table .sq { width: 100%; max-width: 7.5rem; min-width: 0; padding-inline: 2px; }
 .severity-table .short { display: none; }
 @container (max-width: 34rem) {
   .severity-table .long { display: none; }
@@ -317,12 +328,16 @@ td.wrap { white-space: normal; }
 }
 
 /* The stable cards and the chart sit side by side once both fit. */
-.stable-layout { display: grid; gap: var(--fy-space-3); align-items: start; }
+/* Latest stable: both bases and the chart stacked, at one width, as are
+   the image cards below. */
+.stable-layout { display: grid; gap: var(--fy-space-3); }
 .stable-layout figure.card { margin: 0; }
-@media (min-width: 1800px) {
-  .stable-layout { grid-template-columns: minmax(32rem, 1fr) minmax(0, 1.6fr); }
-  .stable-layout .image-cards { grid-template-columns: 1fr; }
+
+@media (min-width: 40rem) {
+  .points { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .points li:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
+
 td.all { color: var(--text-2); }
 th.version { font-weight: 600; }
 .source { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 500; }
