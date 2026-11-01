@@ -159,16 +159,18 @@ jobs:
         if: steps.decide.outputs.rebuild == 'true'
         run: .github/scripts/check-image.sh postgres-publish:candidate
 
+      # Pushed by digest, without tags: nothing users pull changes until the
+      # pushed image has been verified below and its digest promoted.
       - name: Push image
+        id: push
         if: steps.decide.outputs.rebuild == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v6
         with:
           context: ./upstream/${{ matrix.image.dir }}
           cache-from: type=local,src=/tmp/build-cache
-          push: true
+          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
           provenance: mode=max
           sbom: true
-          tags: ${{ steps.decide.outputs.tags }}
           labels: |
             org.opencontainers.image.title=postgres
             org.opencontainers.image.description=docker-library/postgres ${{ matrix.image.version }} (${{ matrix.image.variant }}), stepping down with setpriv instead of gosu
@@ -182,23 +184,50 @@ jobs:
             io.fyannk.postgres.inputs=${{ steps.decide.outputs.fingerprint }}
 
       # A cache miss between the two builds, for example a base image pushed in
-      # the minutes between them, would publish layers that were never checked.
-      # Compare the uncompressed layer digests so that cannot pass silently.
+      # the minutes between them, would publish an image that was never
+      # checked. Compare the uncompressed layers and the runtime configuration
+      # (everything but the labels the push adds), so it cannot pass silently.
+      # The release tags have not moved yet, so a failure here leaves users on
+      # the previous image and the next run rebuilds.
       - name: Pushed image is the checked image
         if: steps.decide.outputs.rebuild == 'true'
         env:
-          PRIMARY: ${{ matrix.image.version }}-${{ matrix.image.variant }}
+          DIGEST: ${{ steps.push.outputs.digest }}
         run: |
           set -euo pipefail
-          checked="$(docker image inspect postgres-publish:candidate --format '{{json .RootFS.Layers}}' | jq -c .)"
-          pushed="$(docker buildx imagetools inspect "${REPO}:${PRIMARY}" --format '{{json .Image}}' | jq -c .rootfs.diff_ids)"
+          runtime='{Env, Entrypoint, Cmd, User, WorkingDir, ExposedPorts, Volumes, StopSignal}
+            | map_values(if . == null or . == "" or . == [] or . == {} then null else . end)'
+          checked="$(docker image inspect postgres-publish:candidate --format '{{json .}}' \
+            | jq -cS "{layers: .RootFS.Layers, config: (.Config | ${runtime})}")"
+          pushed="$(docker buildx imagetools inspect "${REPO}@${DIGEST}" --format '{{json .Image}}' \
+            | jq -cS "{layers: .rootfs.diff_ids, config: (.config | ${runtime})}")"
           if [[ "${checked}" != "${pushed}" ]]; then
-            echo "::error::${REPO}:${PRIMARY} does not have the layers check-image.sh passed; rerun the publish"
+            echo "::error::${REPO}@${DIGEST} differs from the image check-image.sh passed; its tags were not moved"
             echo "checked: ${checked}"
             echo "pushed:  ${pushed}"
             exit 1
           fi
-          echo "Pushed layers match the checked candidate."
+          echo "${REPO}@${DIGEST} matches the checked candidate."
+
+      # The tags are pointed at the verified digest itself, so what they serve
+      # is exactly what was compared above, attestations included.
+      - name: Move the release tags to the verified image
+        if: steps.decide.outputs.rebuild == 'true'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          TAGS: ${{ steps.decide.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          while IFS= read -r tag; do
+            [[ -n "${tag}" ]] && args+=(--tag "${tag}")
+          done <<<"${TAGS}"
+          docker buildx imagetools create "${args[@]}" "${REPO}@${DIGEST}"
+          for tag in ${TAGS}; do
+            resolved="$(docker buildx imagetools inspect "${tag}" --format '{{json .Manifest}}' | jq -r .digest)"
+            [[ "${resolved}" == "${DIGEST}" ]] || { echo "::error::${tag} resolves to ${resolved}, expected ${DIGEST}"; exit 1; }
+            echo "${tag} -> ${DIGEST}"
+          done
 
   # Prune untagged manifests that no tagged index references. Do not enable
   # delete-ghost-images: it can delete tagged release versions.
