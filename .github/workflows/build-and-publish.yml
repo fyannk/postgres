@@ -56,6 +56,7 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # keyless cosign signing
     strategy:
       fail-fast: false
       max-parallel: 8
@@ -258,6 +259,31 @@ jobs:
             echo "${target}@${DIGEST} matches the checked candidate."
           done
 
+      - name: Install cosign
+        if: steps.decide.outputs.rebuild == 'true'
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      # Signed keylessly with this workflow's GitHub identity, and recorded in
+      # Sigstore's public transparency log. The signature covers the index
+      # digest, and through it the image, its SBOM and its provenance. It is
+      # made before the tags move, so no tag ever serves an unsigned image,
+      # and checked the way users are told to check it.
+      - name: Sign the verified image
+        if: steps.decide.outputs.rebuild == 'true'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+          REPOS: ${{ steps.decide.outputs.repos }}
+          IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
+        run: |
+          set -euo pipefail
+          for target in ${REPOS}; do
+            cosign sign --yes "${target}@${DIGEST}"
+            cosign verify "${target}@${DIGEST}" \
+              --certificate-identity "${IDENTITY}" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+            echo "${target}@${DIGEST} is signed by ${IDENTITY}."
+          done
+
       # The tags are pointed at the verified digest itself, so what they serve
       # is exactly what was compared above, attestations included. Each
       # registry's tags are created from its own copy of that digest.
@@ -354,5 +380,7 @@ jobs:
         with:
           package: ${{ env.IMAGE_NAME }}
           delete-untagged: true
+          # Signatures of images deleted above, stored as sha256-<digest> tags.
+          delete-orphaned-images: true
           older-than: 7 days
           validate: true

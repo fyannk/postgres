@@ -99,6 +99,33 @@ docker pull fyannk/postgres:18
 Images are published to GHCR and Docker Hub, for `linux/amd64`. A tag
 resolves to the same image digest on either.
 
+### Verifying an image
+
+Every image is signed with [cosign](https://github.com/sigstore/cosign),
+keylessly: the signature is bound to the publishing workflow's GitHub
+identity and recorded in Sigstore's public transparency log, so there is no
+key to leak or rotate.
+
+```text
+cosign verify ghcr.io/fyannk/postgres:18 \
+  --certificate-identity https://github.com/fyannk/postgres/.github/workflows/build-and-publish.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The signature is stored on GHCR. A Docker Hub tag serves the same digest, so
+check that digest against GHCR:
+
+```text
+digest="$(docker buildx imagetools inspect fyannk/postgres:18 --format '{{json .Manifest}}' | jq -r .digest)"
+cosign verify "ghcr.io/fyannk/postgres@${digest}" \
+  --certificate-identity https://github.com/fyannk/postgres/.github/workflows/build-and-publish.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The signature covers the image index, and through it the image, its SBOM and
+its provenance attestation. Images published before signing was introduced
+are signed when they are next rebuilt, which happens at least weekly.
+
 ## Local builds
 
 The build context is the patched upstream directory, not this repository:
@@ -163,7 +190,9 @@ The nightly publish fetches upstream's default branch, patches every variant
 up front (if any fails, nothing is published), then builds each variant, runs
 the same checks as CI against the built image, and only then pushes it with
 SBOM and provenance attestations. The push reuses the checked build's layers,
-and the workflow fails if the pushed layers differ from the checked ones.
+and the workflow fails if the pushed layers differ from the checked ones. The
+verified digest is then signed with cosign, and only after that do the tags
+move to it.
 
 An image is rebuilt only when an input that can change its contents has moved:
 upstream's directory for that variant, the patch script, or the base image
@@ -179,7 +208,8 @@ A manual run can pin an upstream commit and force a full rebuild.
 An image replaced by a newer push stays in both registries, untagged and
 pullable by digest, for seven days. After that, the cleanup that runs after
 each publish deletes it: on GHCR through
-[ghcr-cleanup-action](https://github.com/dataaxiom/ghcr-cleanup-action), on
+[ghcr-cleanup-action](https://github.com/dataaxiom/ghcr-cleanup-action),
+together with the signatures left without an image, on
 Docker Hub through [`prune-dockerhub.sh`](.github/scripts/prune-dockerhub.sh).
 Tagged images, including older release tags such as `18.5-trixie`, are never
 deleted. Docker Hub's manifest API is not part of Docker's published
