@@ -76,7 +76,13 @@ jobs:
           .github/scripts/patch-upstream.sh upstream "${DIR}"
           git -C upstream diff --stat
 
+      # Base images through Google's Docker Hub mirror, as in the publish,
+      # so pull requests do not depend on Docker Hub's anonymous rate limit.
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+        with:
+          buildkitd-config-inline: |
+            [registry."docker.io"]
+              mirrors = ["mirror.gcr.io"]
 
       - name: Build image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v6

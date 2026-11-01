@@ -87,9 +87,8 @@ docker pull ghcr.io/fyannk/postgres:18
 docker pull fyannk/postgres:18
 ```
 
-Images are published to GHCR and Docker Hub, for `linux/amd64`. Both
-registries receive the same push, so a tag resolves to the same image digest
-on either.
+Images are published to GHCR and Docker Hub, for `linux/amd64`. A tag
+resolves to the same image digest on either.
 
 ## Local builds
 
@@ -156,9 +155,19 @@ deleted. Docker Hub's manifest API is not part of Docker's published
 reference, so a failed Hub cleanup is reported as a warning rather than
 failing the publish.
 
+GHCR is where images are built, checked and tagged. Docker Hub is a mirror:
+once the publish jobs are done, a single job copies to Docker Hub every tag
+whose digest differs there, attestations included
+([`sync-dockerhub.sh`](.github/scripts/sync-dockerhub.sh)). A Docker Hub
+account gets 200 registry requests an hour, so the mirror reads Docker Hub's
+current tags from the Hub API, skips unchanged tags, and retries a throttled
+copy; anything it misses is copied by the next run. Base images are pulled
+through Google's Docker Hub mirror, `mirror.gcr.io`, which serves the same
+digests without counting against Docker Hub's limits.
+
 Docker Hub is optional: it is used when the `DOCKERHUB_USERNAME` and
 `DOCKERHUB_TOKEN` secrets are set (a personal access token with read, write
-and delete access), and the publish goes to GHCR only otherwise.
+and delete access), and images go to GHCR only otherwise.
 
 ## Merge automation
 
