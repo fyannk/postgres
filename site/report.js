@@ -85,33 +85,45 @@ function sourceLabel(side) {
 
 // --- Header -----------------------------------------------------------------
 
+function utc(iso) {
+  return `${new Date(iso).toLocaleString("en", { dateStyle: "medium", timeStyle: "short", hourCycle: "h23", timeZone: "UTC" })} UTC`;
+}
+
+// When the data was produced, from what, and with which tools: one row each.
 function renderMeta() {
   const { generated, upstream_revision: rev, tools } = state.latest;
-  const meta = document.getElementById("meta");
-  meta.replaceChildren(
-    "Last scan ",
-    el("time", { datetime: generated, text: new Date(generated).toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }) + " UTC" }),
-    " · upstream recipe ",
-    el("a", { href: `https://github.com/docker-library/postgres/tree/${rev}`, text: rev.slice(0, 7) }),
-    ` · grype ${tools.grype}, Trivy ${tools.trivy}, Syft ${tools.syft}`,
-    el("br"),
-    "Advisory databases: ",
-    databaseAge("grype", tools.grype_db, generated),
-    " · ",
-    databaseAge("Trivy", tools.trivy_db, generated),
-  );
+  const row = (label, ...cells) => el("tr", {}, el("th", { scope: "row", text: label }), ...cells);
+  const tool = (name, version, database) => row(name,
+    el("td", { class: "version", text: version }),
+    el("td", {}, database));
+  document.getElementById("meta").replaceChildren(el("table", { class: "meta-table" },
+    el("caption", { class: "vh", text: "About this scan" }),
+    el("tbody", {},
+      row("Last scan", el("td", { colspan: "2" }, el("time", { datetime: generated, text: utc(generated) }))),
+      row("Upstream recipe", el("td", { colspan: "2" },
+        el("a", { href: `https://github.com/docker-library/postgres/tree/${rev}` }, el("code", { text: rev.slice(0, 7) })),
+        " docker-library/postgres")),
+    ),
+    el("tbody", {},
+      el("tr", { class: "head" },
+        el("th", { scope: "col", text: "Tool" }),
+        el("th", { scope: "col", text: "Version" }),
+        el("th", { scope: "col", text: "Advisory database" })),
+      tool("grype", tools.grype, databaseAge(tools.grype_db, generated)),
+      tool("Trivy", tools.trivy, databaseAge(tools.trivy_db, generated)),
+      tool("Syft", tools.syft, el("span", { class: "muted", text: "none, inventory only" })),
+    ),
+  ));
 }
 
 // A database more than two days older than the scan has missed updates both
 // publish daily, so the result is flagged rather than shown as current.
 const STALE_DB_MS = 2 * 24 * 60 * 60 * 1000;
 
-function databaseAge(scanner, built, scanned) {
-  if (!built) return status(`${scanner} build time unknown`);
-  const when = new Date(built);
-  const label = `${scanner} built ${when.toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC`;
-  const time = el("time", { datetime: built, text: label });
-  if (new Date(scanned) - when <= STALE_DB_MS) return time;
+function databaseAge(built, scanned) {
+  if (!built) return status("build time unknown");
+  const time = el("time", { datetime: built, text: `built ${utc(built)}` });
+  if (new Date(scanned) - new Date(built) <= STALE_DB_MS) return time;
   return el("span", { class: "status warn" }, time, ", more than two days before the scan");
 }
 
