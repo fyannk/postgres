@@ -78,6 +78,7 @@ h3 { font-size: var(--fy-text-md); margin: 0; }
 .eyebrow .mark { display: block; width: 56px; height: auto; }
 .eyebrow .repo { font-family: var(--mono); font-weight: 500; font-size: var(--fy-text-sm); color: var(--text-2); }
 .lede { font-size: 1.12rem; color: var(--text-2); max-width: 60rem; margin: 0 0 1rem; }
+.independent { font-size: 0.9rem; color: var(--text-2); max-width: 60rem; margin: 0 0 1rem; padding-left: 0.75rem; border-left: 2px solid var(--border); }
 .muted { color: var(--text-2); font-size: 0.92rem; }
 
 /* About this scan: a compact key/value table under the lede. */

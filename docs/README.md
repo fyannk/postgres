@@ -9,3 +9,8 @@
 
 The live comparison with the official image is at
 [fyannk.github.io/postgres](https://fyannk.github.io/postgres/).
+
+[`dockerhub.md`](dockerhub.md) is the overview shown on
+[Docker Hub](https://hub.docker.com/r/fyannk/postgres). A push to `main` that
+changes it updates Docker Hub through
+[`dockerhub-description.yml`](../.github/workflows/dockerhub-description.yml).

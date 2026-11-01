@@ -32,6 +32,11 @@ shows the result, including whatever is still left.
 > have a fix today; the report shows the rest, and how current the scanners'
 > data is.
 
+> [!NOTE]
+> An independent, personal project. It is not affiliated with, endorsed by or
+> sponsored by the PostgreSQL project, the PostgreSQL Community Association of
+> Canada, docker-library, Docker, or any company.
+
 ## Why use it?
 
 - **Drop-in**: change the registry prefix, keep everything else.
