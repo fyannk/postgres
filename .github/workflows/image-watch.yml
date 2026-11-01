@@ -1,0 +1,97 @@
+name: Published image watch
+
+# The pull request gate only fails on fixable criticals a change introduces.
+# One that reaches a published image because an advisory was filed after the
+# fact is tracked here instead: a single issue that opens when a fixable
+# critical appears, is updated in place while it remains, and closes once the
+# nightly rebuild has cleared it. Editing an issue sends no notification, so a
+# finding that persists for a week costs one email, not seven.
+
+on:
+  schedule:
+    # Two hours after the nightly publish, so the scan sees what it shipped.
+    - cron: "41 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: image-watch
+  cancel-in-progress: false
+
+jobs:
+  watch:
+    name: Fixable criticals in the published images
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install grype
+        id: grype
+        uses: anchore/scan-action/download-grype@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+
+      - name: Open, update or close the tracking issue
+        env:
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+          REPO: ghcr.io/${{ github.repository_owner }}/postgres
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Published images have fixable critical vulnerabilities"
+
+          .github/scripts/fetch-upstream.sh upstream >/dev/null
+          mapfile -t images < <(.github/scripts/matrix.sh upstream | jq -r '.[] | "\(.major)-\(.variant)"')
+
+          findings=""
+          for tag in "${images[@]}"; do
+            if ! "${GRYPE}" -q -o json "registry:${REPO}:${tag}" > scan.json; then
+              echo "::warning::Could not scan ${REPO}:${tag}"
+              continue
+            fi
+            rows="$(jq -r --arg tag "${tag}" '[.matches[]
+              | select(.vulnerability.severity == "Critical" and .vulnerability.fix.state == "fixed")
+              | "| `\($tag)` | \(.vulnerability.id) | \(.artifact.name) | \(.artifact.version) | \(.vulnerability.fix.versions | join(", ")) |"]
+              | unique | .[]' scan.json)"
+            if [[ -n "${rows}" ]]; then
+              findings+="${rows}"$'\n'
+            fi
+          done
+
+          number="$(gh issue list --state open --search "in:title \"${title}\"" \
+            --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -n 1)"
+
+          if [[ -z "${findings}" ]]; then
+            if [[ -n "${number}" ]]; then
+              gh issue close "${number}" --comment "Cleared: [this scan](${RUN_URL}) of \`${REPO}\` finds no fixable critical."
+            fi
+            echo "No fixable critical in ${REPO}."
+            exit 0
+          fi
+
+          body="$(cat <<EOB
+          [The nightly scan](${RUN_URL}) of \`${REPO}\` found fixable critical vulnerabilities.
+
+          | Image | Advisory | Package | Installed | Fixed in |
+          | --- | --- | --- | --- | --- |
+          ${findings}
+
+          The nightly rebuild picks up a fix on its own once the Debian, Alpine
+          or PostgreSQL repositories ship it, at the latest within a week. A
+          finding that survives a rebuild is usually waiting on upstream
+          (docker-library/postgres or the distribution). This issue closes
+          itself once a scan comes back clean.
+          EOB
+          )"
+
+          if [[ -n "${number}" ]]; then
+            gh issue edit "${number}" --body "${body}"
+          else
+            gh issue create --title "${title}" --body "${body}"
+          fi

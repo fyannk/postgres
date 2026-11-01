@@ -1,0 +1,25 @@
+version: 2
+
+# There are no Dockerfiles in this repository to bump: the image recipes are
+# docker-library/postgres's own, fetched at build time, and the nightly publish
+# follows upstream's default branch. Only the actions the workflows pin are
+# Dependabot's to move.
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:45"
+      timezone: Europe/Paris
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci(deps)"
+    groups:
+      actions-routine-updates:
+        applies-to: version-updates
+        patterns:
+          - "*"
+        update-types:
+          - minor
+          - patch

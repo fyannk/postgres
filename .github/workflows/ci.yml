@@ -1,0 +1,164 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  ACTIONLINT_IMAGE: rhysd/actionlint:1.7.9@sha256:a0383f60d92601e2694e24b24d37df7b6a40bed7cedbc447611c50009bf02d94
+
+jobs:
+  lint:
+    name: Lint and patch upstream
+    runs-on: ubuntu-latest
+    outputs:
+      upstream: ${{ steps.upstream.outputs.revision }}
+      matrix: ${{ steps.upstream.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Workflow syntax
+        run: |
+          docker run --rm -v "${PWD}:/repo" -w /repo "${ACTIONLINT_IMAGE}" -color
+
+      - name: Shell scripts
+        run: shellcheck .github/scripts/*.sh
+
+      # Patching every variant here, rather than only the ones built below,
+      # means an upstream reshuffle that breaks the rewrite fails in one place
+      # with one clear message.
+      - name: Patch the current upstream recipe
+        id: upstream
+        run: |
+          set -euo pipefail
+          revision="$(.github/scripts/fetch-upstream.sh upstream)"
+          .github/scripts/patch-upstream.sh upstream
+          echo "revision=${revision}" >> "${GITHUB_OUTPUT}"
+          echo "matrix=$(.github/scripts/matrix.sh upstream)" >> "${GITHUB_OUTPUT}"
+          echo "Upstream docker-library/postgres at ${revision}"
+
+  build:
+    name: Build ${{ matrix.image.dir }}
+    needs: lint
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.lint.outputs.matrix) }}
+    env:
+      DIR: ${{ matrix.image.dir }}
+      IMAGE: postgres-ci:${{ matrix.image.version }}-${{ matrix.image.variant }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Patch the upstream recipe
+        env:
+          UPSTREAM: ${{ needs.lint.outputs.upstream }}
+        run: |
+          set -euo pipefail
+          .github/scripts/fetch-upstream.sh upstream "${UPSTREAM}"
+          .github/scripts/patch-upstream.sh upstream "${DIR}"
+          git -C upstream diff --stat
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v6
+        with:
+          context: ./upstream/${{ matrix.image.dir }}
+          pull: true
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=${{ matrix.image.dir }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image.dir }}
+
+      - name: Image behaves like upstream, without gosu
+        run: .github/scripts/check-image.sh "${IMAGE}"
+
+      # The cutoff is critical rather than high on purpose: a finding this
+      # repository cannot fix would leave a required check permanently red.
+      # Everything below the cutoff still reaches the Security tab below.
+      - name: Install grype
+        id: grype
+        uses: anchore/scan-action/download-grype@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+
+      # Only a fixable critical this change brings in fails the check. One that
+      # is already in the published image appeared because an advisory was
+      # filed, not because of this change; image-watch.yml tracks those, and
+      # the nightly rebuild clears them once a fix can be applied.
+      - name: Fixable criticals introduced by this change
+        env:
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+          BASELINE: ghcr.io/${{ github.repository_owner }}/postgres:${{ matrix.image.version }}-${{ matrix.image.variant }}
+        run: |
+          set -euo pipefail
+          fixable='[.matches[]
+            | select(.vulnerability.severity == "Critical" and .vulnerability.fix.state == "fixed")
+            | "\(.vulnerability.id) \(.artifact.name)"] | unique | .[]'
+
+          "${GRYPE}" -q -o json "${IMAGE}" | jq -r "${fixable}" | sort > candidate.txt
+          if "${GRYPE}" -q -o json "registry:${BASELINE}" > baseline.json; then
+            jq -r "${fixable}" baseline.json | sort > baseline.txt
+          else
+            # Without a baseline nothing can be called pre-existing, so gate
+            # on everything rather than let a finding through unchecked.
+            echo "::warning::Could not scan ${BASELINE}; gating on every fixable critical"
+            : > baseline.txt
+          fi
+
+          introduced="$(comm -23 candidate.txt baseline.txt)"
+          existing="$(comm -12 candidate.txt baseline.txt)"
+
+          if [[ -n "${existing}" ]]; then
+            echo "::warning::Already in the published image, tracked by the image watch issue: $(tr '\n' ';' <<<"${existing}")"
+          fi
+          if [[ -n "${introduced}" ]]; then
+            echo "Fixable criticals introduced by this change:"
+            echo "${introduced}"
+            exit 1
+          fi
+          echo "No fixable critical introduced by this change."
+
+      - name: Full inventory
+        if: always()
+        id: full
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ env.IMAGE }}
+          fail-build: false
+          output-format: sarif
+
+      - name: Publish to code scanning
+        if: always() && steps.full.outputs.sarif != ''
+        uses: github/codeql-action/upload-sarif@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          sarif_file: ${{ steps.full.outputs.sarif }}
+          category: grype-${{ matrix.image.major }}-${{ matrix.image.variant }}
+
+  # A single, stable name for the ruleset to require, however many variants
+  # upstream adds or retires.
+  images:
+    name: All images
+    if: always()
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every variant built and passed
+        env:
+          RESULT: ${{ needs.build.result }}
+        run: |
+          echo "build matrix: ${RESULT}"
+          [[ "${RESULT}" == "success" ]]
