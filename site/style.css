@@ -36,10 +36,11 @@ html {
   accent-color: var(--ours);
 }
 
+/* Fluid: data uses the whole screen; running text keeps a readable measure
+   on its own. */
 body {
   margin: 0 auto;
-  max-width: 72rem;
-  padding: 2.5rem 1.25rem 4rem;
+  padding: clamp(1.5rem, 3vw, 3rem) clamp(1rem, 3vw, 3rem) 4rem;
 }
 
 a { color: var(--link); text-underline-offset: 0.15em; }
@@ -64,12 +65,30 @@ h3 { font-size: var(--fy-text-md); margin: 0; }
 
 .eyebrow { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--fy-space-2) var(--fy-space-4); }
 .eyebrow .repo { font-family: var(--mono); font-weight: 500; font-size: var(--fy-text-sm); color: var(--text-2); }
-.lede { font-size: 1.12rem; color: var(--text-2); max-width: 46rem; margin: 0 0 1rem; }
+.lede { font-size: 1.12rem; color: var(--text-2); max-width: 60rem; margin: 0 0 1rem; }
 .meta, .muted { color: var(--text-2); font-size: 0.92rem; }
 .meta { margin: 0; }
 .scope { margin: 0 0 0.6rem; }
-.prose { max-width: 46rem; }
-.prose li { margin-bottom: 0.6rem; }
+.prose > p { max-width: 60rem; }
+.prose pre { max-width: 60rem; }
+
+/* Lists of points tile as cards across the width. */
+.points {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+  gap: var(--fy-space-3);
+  list-style: none;
+  padding: 0;
+  margin: var(--fy-space-4) 0;
+}
+.points li {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--fy-space-4);
+  margin: 0;
+}
+.points strong { display: block; font-family: var(--mono); font-weight: 600; margin-bottom: var(--fy-space-1); }
 
 .card {
   background: var(--surface);
@@ -261,14 +280,53 @@ td.wrap { white-space: normal; }
 .squares-key { margin: var(--fy-space-2) 0 var(--fy-space-6); line-height: 1.9; }
 .squares-key .sq { min-width: 0; padding: 0 var(--fy-space-1); }
 
+/* Image cards: as many columns as fit, each table sized by its card. */
+.image-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 32rem), 1fr));
+  gap: var(--fy-space-3);
+}
+.image-card { margin: 0; padding: var(--fy-space-4); container-type: inline-size; }
+.image-card h3 { margin-bottom: var(--fy-space-2); }
+.severity-table { table-layout: fixed; }
+.severity-table thead th:first-child { width: 7.5rem; }
+.severity-table th.all { width: 5rem; }
+.severity-table th, .severity-table td { padding: 4px var(--fy-space-1); }
 .severity-table th.sev, .severity-table td.sev { text-align: center; }
-.severity-table td.sev { padding: 3px var(--fy-space-1); }
 .severity-table tbody + tbody { border-top: 1px solid var(--axis); }
-.severity-table tbody th[scope="rowgroup"], .severity-table tbody td[rowspan] { vertical-align: top; }
+.severity-table tr.side th { padding-top: var(--fy-space-2); border-bottom: 0; }
+.severity-table .sq { width: 100%; min-width: 0; padding-inline: 2px; }
+.severity-table .short { display: none; }
+@container (max-width: 34rem) {
+  .severity-table .long { display: none; }
+  .severity-table .short { display: inline; }
+  .severity-table .all { display: none; }
+  .severity-table thead th:first-child { width: 5.5rem; }
+  .severity-table { font-size: var(--fy-text-xs); }
+}
+/* Phone width: the squares get every pixel left, up to "126/999". */
+@container (max-width: 24rem) {
+  .severity-table thead th:first-child { width: 3.9rem; }
+  .severity-table th, .severity-table td { padding: 3px 1px; }
+  .severity-table tbody .key-dot { display: none; }
+  .severity-table td.sev .sq { padding-inline: 0; font-size: 11px; letter-spacing: -0.02em; }
+  .severity-table .source { gap: 0.3rem; }
+}
+@media (max-width: 30rem) {
+  .card, .image-card, .points li { padding: var(--fy-space-3); }
+}
+
+/* The stable cards and the chart sit side by side once both fit. */
+.stable-layout { display: grid; gap: var(--fy-space-3); align-items: start; }
+.stable-layout figure.card { margin: 0; }
+@media (min-width: 1800px) {
+  .stable-layout { grid-template-columns: minmax(32rem, 1fr) minmax(0, 1.6fr); }
+  .stable-layout .image-cards { grid-template-columns: 1fr; }
+}
 td.all { color: var(--text-2); }
 th.version { font-weight: 600; }
 .source { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 500; }
-td.scanner { color: var(--text-2); }
+.severity-table .scanner { color: var(--text-2); font-weight: 500; }
 
 #tags td.wrap { white-space: normal; }
 code.tag {
@@ -284,4 +342,19 @@ td.links { white-space: nowrap; }
 
 @media (forced-colors: active) {
   .sq { border-color: CanvasText; forced-color-adjust: none; }
+}
+
+/* Narrow screens: each tag row becomes a block. */
+@media (max-width: 48rem) {
+  #tags thead { display: none; }
+  #tags tr {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 2px var(--fy-space-3);
+    padding: var(--fy-space-3) 0;
+    border-bottom: 1px solid var(--grid);
+  }
+  #tags th, #tags td { display: block; border: 0; padding: 0; white-space: normal; }
+  #tags td[data-label] { grid-column: 1 / -1; }
+  #tags td[data-label]::before { content: attr(data-label) " "; color: var(--text-2); font-family: var(--font); }
 }

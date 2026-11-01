@@ -5,11 +5,11 @@
 // "Other" folds grype's negligible (Debian's "unimportant") and the findings
 // a scanner could not rate.
 const LEVELS = [
-  { key: "critical", label: "Critical" },
+  { key: "critical", label: "Critical", short: "Crit" },
   { key: "high", label: "High" },
-  { key: "medium", label: "Medium" },
+  { key: "medium", label: "Medium", short: "Med" },
   { key: "low", label: "Low" },
-  { key: "other", label: "Other", from: ["negligible", "unknown"] },
+  { key: "other", label: "Other", short: "Oth", from: ["negligible", "unknown"] },
 ];
 const SIDES = [
   { key: "ours", label: "fyannk" },
@@ -145,10 +145,13 @@ function severityCells(summary) {
   return [...LEVELS.map((level) => square(level.key, levelCounts(summary, level))), allCell(summary)];
 }
 
+// Narrow cards show the short labels; the full one stays for screen readers.
 function severityHeads() {
   return [
-    ...LEVELS.map((level) => el("th", { scope: "col", class: "sev", text: level.label })),
-    el("th", { scope: "col", class: "num", text: "All" }),
+    ...LEVELS.map((level) => el("th", { scope: "col", class: "sev" },
+      el("span", { class: "long", text: level.label }),
+      el("span", { class: "short", "aria-hidden": "true", text: level.short ?? level.label }))),
+    el("th", { scope: "col", class: "num all", text: "All" }),
   ];
 }
 
@@ -179,32 +182,49 @@ function stableImages() {
 
 function renderStable() {
   const stable = stableImages();
-  const table = document.getElementById("stable");
+  const container = document.getElementById("stable");
   if (!stable) {
-    table.replaceChildren(el("caption", { text: "No stable release has been scanned yet." }));
+    container.replaceChildren(el("p", { class: "muted", text: "No stable release has been scanned yet." }));
     return;
   }
   document.getElementById("stable-title").textContent = `Latest stable: PostgreSQL ${stable.version}`;
   const scanner = SCANNERS.find((s) => s.key === state.scanner);
+  container.replaceChildren(...[stable.debian, stable.alpine].filter(Boolean)
+    .map((image) => imageCard(image, osLabel(image), [scanner])));
+}
+
+// One card per image: its sides, each scanned by the given scanners. With a
+// single scanner the side names its row; with several, the side heads a
+// group of scanner rows. Cards size themselves, so they tile on wide screens
+// and stack on narrow ones.
+function imageCard(image, title, scanners) {
+  const single = scanners.length === 1;
+  const columns = 1 + LEVELS.length + 1;
   const head = el("thead", {}, el("tr", {},
-    el("th", { scope: "col", text: "Base" }),
-    el("th", { scope: "col", text: "Image" }),
+    el("th", { scope: "col", text: single ? "Image" : "Scanner" }),
     ...severityHeads(),
   ));
-  const bodies = [stable.debian, stable.alpine].filter(Boolean).map((image) => {
+  const bodies = SIDES.map((side) => {
+    const info = image[side.key];
     const body = el("tbody");
-    SIDES.forEach((side, i) => {
-      const row = el("tr");
-      if (i === 0) row.append(el("th", { scope: "rowgroup", rowspan: String(SIDES.length), text: osLabel(image) }));
-      row.append(el("th", { scope: "row" }, sourceLabel(side)));
-      const summary = image[side.key]?.scans?.[state.scanner];
-      if (summary) row.append(...severityCells(summary));
-      else row.append(el("td", { colspan: String(LEVELS.length + 1) }, status(unavailable(side.key, image[side.key]))));
-      body.append(row);
-    });
+    if (!single) body.append(el("tr", { class: "side" }, el("th", { scope: "rowgroup", colspan: String(columns) }, sourceLabel(side))));
+    if (!info?.scans) {
+      body.append(el("tr", {},
+        el("th", { scope: "row" }, single ? sourceLabel(side) : ""),
+        el("td", { colspan: String(columns - 1) }, status(unavailable(side.key, info)))));
+      return body;
+    }
+    for (const scanner of scanners) {
+      const summary = info.scans[scanner.key];
+      body.append(el("tr", {},
+        el("th", { scope: "row" }, single ? sourceLabel(side) : el("span", { class: "scanner", text: scanner.label })),
+        ...(summary ? severityCells(summary) : [el("td", { colspan: String(columns - 1) }, status("not scanned"))])));
+    }
     return body;
   });
-  table.replaceChildren(el("caption", { text: `PostgreSQL ${stable.version}, scanned with ${scanner.label}` }), head, ...bodies);
+  return el("article", { class: "card image-card" },
+    el("h3", { text: title }),
+    el("div", { class: "table-wrap" }, el("table", { class: "severity-table" }, head, ...bodies)));
 }
 
 // --- Trend chart --------------------------------------------------------------------
@@ -287,8 +307,11 @@ function renderChart() {
   }
 
   const width = Math.max(container.clientWidth, 320);
-  const height = 280;
-  const m = { top: 16, right: 150, bottom: 28, left: 44 };
+  // Taller on wide screens, so the lines do not flatten out.
+  const height = Math.round(Math.min(440, Math.max(260, width * 0.3)));
+  // Narrow charts drop the end labels for room; the legend names the lines.
+  const endLabels = width >= 560;
+  const m = { top: 16, right: endLabels ? 150 : 12, bottom: 28, left: 44 };
   const plotW = width - m.left - m.right;
   const plotH = height - m.top - m.bottom;
   const values = points.flatMap((p) => Object.values(p.values).filter((v) => v != null));
@@ -306,7 +329,7 @@ function renderChart() {
     label.textContent = fmt.format(v);
     root.append(label);
   }
-  const ticks = new Set([0, points.length - 1, Math.round((points.length - 1) / 2)]);
+  const ticks = new Set(endLabels ? [0, points.length - 1, Math.round((points.length - 1) / 2)] : [0, points.length - 1]);
   for (const i of ticks) {
     const label = svg("text", { class: "tick", x: x(i), y: height - 8, "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle" });
     label.textContent = shortDate(points[i].date);
@@ -333,7 +356,7 @@ function renderChart() {
     root.append(svg("circle", { class: `dot ${s.side}`, cx: x(lastIndex), cy: y(v), r: 4 }));
     ends.push({ x: x(lastIndex), y: y(v) + 4, text: `${s.label} ${fmt.format(v)}` });
   }
-  for (const end of spreadLabels(ends, 14, height - m.bottom)) {
+  for (const end of endLabels ? spreadLabels(ends, 14, height - m.bottom) : []) {
     const label = svg("text", { class: "end-label", x: end.x + 10, y: end.y });
     label.textContent = end.text;
     root.append(label);
@@ -405,41 +428,8 @@ function renderChart() {
 // --- Every image ----------------------------------------------------------------------
 
 function renderAll() {
-  const head = el("thead", {}, el("tr", {},
-    el("th", { scope: "col", text: "PostgreSQL" }),
-    el("th", { scope: "col", text: "Base" }),
-    el("th", { scope: "col", text: "Image" }),
-    el("th", { scope: "col", text: "Scanner" }),
-    ...severityHeads(),
-  ));
-  const bodies = orderedImages().map((image) => {
-    // One row per scanner for a scanned side, one status row otherwise.
-    const rows = SIDES.flatMap((side) => {
-      const info = image[side.key];
-      if (!info?.scans) return [{ side, first: true, span: 1, cells: [el("td", { colspan: String(LEVELS.length + 2) }, status(unavailable(side.key, info)))] }];
-      return SCANNERS.map((scanner, i) => ({
-        side, first: i === 0, span: SCANNERS.length,
-        cells: [el("td", { class: "scanner", text: scanner.label }),
-          ...(info.scans[scanner.key] ? severityCells(info.scans[scanner.key]) : [el("td", { colspan: String(LEVELS.length + 1) }, status("not scanned"))])],
-      }));
-    });
-    const body = el("tbody");
-    rows.forEach((r, i) => {
-      const row = el("tr");
-      if (i === 0) {
-        row.append(
-          el("th", { scope: "rowgroup", rowspan: String(rows.length), class: "version", text: image.version }),
-          el("td", { rowspan: String(rows.length), text: osLabel(image) }),
-        );
-      }
-      if (r.first) row.append(el("th", { scope: "row", rowspan: String(r.span) }, sourceLabel(r.side)));
-      row.append(...r.cells);
-      body.append(row);
-    });
-    return body;
-  });
-  document.getElementById("all").replaceChildren(
-    el("caption", { text: "Every image, both scanners. Each cell: with a fix / all findings." }), head, ...bodies);
+  document.getElementById("all").replaceChildren(...orderedImages()
+    .map((image) => imageCard(image, `${image.version} · ${osLabel(image)}`, SCANNERS)));
 }
 
 // --- Tags ---------------------------------------------------------------------------
@@ -464,9 +454,12 @@ function renderTags() {
       published ? el("a", { href: `sboms/${encodeURIComponent(image.name)}.spdx.json`, text: "SBOM" }) : null,
       published ? " · " : null,
       el("a", { href: `data/images/${encodeURIComponent(image.name)}.json`, text: "findings" }));
+    tags.dataset.label = "Tags";
+    digest.dataset.label = "Digest";
+    data.dataset.label = "Data";
     return el("tr", {},
       el("th", { scope: "row", class: "version", text: image.version }),
-      el("td", { text: osLabel(image) }),
+      el("td", { class: "os", text: osLabel(image) }),
       tags, digest, data);
   }));
   document.getElementById("tags").replaceChildren(
