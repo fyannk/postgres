@@ -1,3 +1,5 @@
+<img src="site/assets/mark.svg" alt="fyannk/postgres mark: an elephant peeking over a shield bearing the fyannk ermine" width="140">
+
 # postgres
 
 ![Upstream](https://img.shields.io/badge/recipe-docker--library%2Fpostgres-1f6feb?style=for-the-badge)
@@ -248,3 +250,7 @@ person.
 This repository does not fork docker-library/postgres. It carries no copy of
 upstream's Dockerfiles or scripts; it fetches them at build time and rewrites
 only the privilege step-down.
+
+PostgreSQL® and the Slonik logo are trademarks or registered trademarks of the
+PostgreSQL Community Association of Canada. This project is not affiliated
+with or endorsed by the Association.

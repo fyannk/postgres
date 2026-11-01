@@ -74,7 +74,8 @@ h3 { font-size: var(--fy-text-md); margin: 0; }
 .wordmark::after { content: "\258D"; color: var(--fy-accent); }
 .wordmark:hover { color: var(--text); }
 
-.eyebrow { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--fy-space-2) var(--fy-space-4); }
+.eyebrow { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--fy-space-2) var(--fy-space-4); }
+.eyebrow .mark { display: block; width: 56px; height: auto; }
 .eyebrow .repo { font-family: var(--mono); font-weight: 500; font-size: var(--fy-text-sm); color: var(--text-2); }
 .lede { font-size: 1.12rem; color: var(--text-2); max-width: 60rem; margin: 0 0 1rem; }
 .muted { color: var(--text-2); font-size: 0.92rem; }
@@ -237,6 +238,7 @@ td.na { color: var(--muted); }
 tbody tr:hover { background: var(--wash); }
 td.wrap { white-space: normal; }
 
+.page-foot p { margin: 0 0 var(--fy-space-2); max-width: 60rem; }
 .page-foot { margin-top: 4rem; color: var(--text-2); font-size: 0.88rem; border-top: 1px solid var(--grid); padding-top: 1rem; }
 .noscript { background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: var(--radius); }
 
