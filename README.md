@@ -71,7 +71,7 @@ change:
 | Tag | Example | Points to |
 | --- | --- | --- |
 | `<version>-<variant>` | `18.6-trixie`, `18.6-alpine3.24` | That release on that base |
-| `<major>-<variant>` | `18-bookworm`, `17-alpine3.23` | Newest release of that major on that base |
+| `<major>-<variant>` | `18-trixie`, `17-alpine3.24` | Newest release of that major on that base |
 | `<version>`, `<major>` | `18.6`, `18` | The default Debian base |
 | `<version>-alpine`, `<major>-alpine` | `18-alpine` | The default Alpine base |
 | `<variant>`, `latest`, `alpine` | `trixie`, `latest` | Newest stable major |
