@@ -14,6 +14,7 @@
   <a href="https://github.com/fyannk/postgres/actions/workflows/ci.yml"><img src="https://github.com/fyannk/postgres/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
   <a href="docs/tags.md#verifying-an-image"><img src="https://img.shields.io/badge/signed-cosign-090c0a?style=flat-square&labelColor=1b231d" alt="Signed with cosign"></a>
   <a href="https://github.com/fyannk/postgres/pkgs/container/postgres"><img src="https://img.shields.io/badge/ghcr.io-fyannk%2Fpostgres-090c0a?style=flat-square&logo=github&logoColor=b3bf3a&labelColor=1b231d" alt="On GitHub Container Registry"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-090c0a?style=flat-square&labelColor=1b231d" alt="Apache-2.0 license"></a>
   <a href="https://hub.docker.com/r/fyannk/postgres"><img src="https://img.shields.io/badge/docker_hub-fyannk%2Fpostgres-090c0a?style=flat-square&logo=docker&logoColor=b3bf3a&labelColor=1b231d" alt="On Docker Hub"></a>
 </p>
 
@@ -71,6 +72,12 @@ first. For larger changes, open an issue before writing code.
 ## Security
 
 Report vulnerabilities privately, as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Apache-2.0. See [LICENSE](LICENSE). The images also contain
+docker-library/postgres's scripts, under the MIT license; see
+[NOTICE](NOTICE).
 
 ---
 
