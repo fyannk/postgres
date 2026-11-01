@@ -11,7 +11,7 @@ image="${1:?usage: $0 <image>}"
 fail=0
 name="pg-check-$$"
 init_dir="$(mktemp -d)"
-# shellcheck disable=SC2329 # invoked by the EXIT trap
+# shellcheck disable=SC2317,SC2329 # invoked by the EXIT trap
 cleanup() { docker rm -f "${name}" >/dev/null 2>&1 || true; rm -rf "${init_dir}"; }
 trap cleanup EXIT
 
