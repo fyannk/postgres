@@ -1,0 +1,50 @@
+name: Docker Hub description
+
+# Keeps the Docker Hub repository's short description and overview in step
+# with docs/dockerhub.md. Docker Hub does not resolve relative links and
+# renders less HTML than GitHub, so the overview is its own file rather than
+# the README.
+#
+# The token needs Docker Hub's read, write and delete scope: Docker Hub
+# accepts nothing narrower for editing a repository's description. Without
+# the secrets the job is skipped, like the Docker Hub mirror in the publish.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - docs/dockerhub.md
+      - site/assets/mark-160.png
+      - .github/workflows/dockerhub-description.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dockerhub-description
+  cancel-in-progress: true
+
+jobs:
+  update:
+    name: Update the Docker Hub description
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      HUB_ENABLED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        if: env.HUB_ENABLED == 'true'
+        with:
+          persist-credentials: false
+
+      - name: Push the description
+        if: env.HUB_ENABLED == 'true'
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: ${{ secrets.DOCKERHUB_USERNAME }}/postgres
+          short-description: Official PostgreSQL® image, rebuilt to leave out the known vulnerabilities that already have a fix
+          readme-filepath: docs/dockerhub.md
