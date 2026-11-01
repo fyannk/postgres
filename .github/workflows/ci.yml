@@ -60,6 +60,10 @@ jobs:
     env:
       DIR: ${{ matrix.image.dir }}
       IMAGE: postgres-ci:${{ matrix.image.version }}-${{ matrix.image.variant }}
+      # Match the Go standard library compiled into binaries, as Trivy and
+      # Docker Scout do. Off by default in grype, which then misses exactly
+      # the findings a bundled Go tool such as gosu brings in.
+      GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB: "true"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -90,7 +94,7 @@ jobs:
 
       # The cutoff is critical rather than high on purpose: a finding this
       # repository cannot fix would leave a required check permanently red.
-      # Everything below the cutoff still reaches the Security tab below.
+      # Fixable findings below the cutoff still reach the Security tab below.
       - name: Install grype
         id: grype
         uses: anchore/scan-action/download-grype@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
@@ -132,13 +136,18 @@ jobs:
           fi
           echo "No fixable critical introduced by this change."
 
-      - name: Full inventory
+      # Only findings with a fix go to the Security tab, so it lists what a
+      # rebuild can clear. Distribution packages with no fix yet would
+      # otherwise bury those under hundreds of alerts nobody can act on; the
+      # full inventory, fixed or not, is on the published security report.
+      - name: Fixable findings
         if: always()
         id: full
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:
           image: ${{ env.IMAGE }}
           fail-build: false
+          only-fixed: true
           output-format: sarif
 
       - name: Publish to code scanning

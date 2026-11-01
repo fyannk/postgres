@@ -36,8 +36,9 @@ coordinated disclosure date has been agreed.
 ## How scan findings are triaged
 
 Every pull request builds every image, scans it with grype, and publishes the
-full result to this repository's code scanning alerts. The alerts are an
-inventory of what is present, not a queue of outstanding work.
+findings that have a fix to this repository's code scanning alerts, so the
+alerts list what a rebuild can clear. Grype is set to match the Go standard
+library of any Go binary in the image, as Trivy and Docker Scout do by default.
 
 **CI blocks on critical findings that have an applicable fix and that the
 change introduces.** That is the only class where a change to this repository
@@ -48,15 +49,16 @@ advisory was filed after it shipped, does not fail unrelated pull requests. A
 nightly scan of the published images tracks it in a single issue that closes
 itself once a rebuild clears it.
 
-Findings are left open, and are expected to be left open, when no fix is
-published by Debian, Alpine or the PostgreSQL package repositories. The
-rebuild picks a fix up automatically once it exists.
+Findings with no fix published by Debian, Alpine or the PostgreSQL package
+repositories are not raised as alerts. The rebuild picks a fix up
+automatically once it exists, and the finding becomes an alert only if a fix
+exists that the published image does not have yet.
 
 An alert is dismissed only when the vulnerable code path is demonstrably
 unreachable in the image, and the dismissal comment records the evidence.
 
-To see only what is actionable:
+To see only what is actionable, as the alerts do:
 
 ```text
-grype ghcr.io/fyannk/postgres:latest --only-fixed
+GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB=true grype ghcr.io/fyannk/postgres:latest --only-fixed
 ```

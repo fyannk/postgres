@@ -143,6 +143,8 @@ jobs:
           } >> "${GITHUB_OUTPUT}"
 
       # Built and checked locally first, so a broken image is never pushed.
+      # Every layer goes to a local cache that the push below builds from, so
+      # what is pushed is the image that was checked, not a second build.
       - name: Build image
         if: steps.decide.outputs.rebuild == 'true'
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v6
@@ -151,6 +153,7 @@ jobs:
           pull: true
           load: true
           tags: postgres-publish:candidate
+          cache-to: type=local,dest=/tmp/build-cache,mode=max
 
       - name: Image behaves like upstream, without gosu
         if: steps.decide.outputs.rebuild == 'true'
@@ -161,6 +164,7 @@ jobs:
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v6
         with:
           context: ./upstream/${{ matrix.image.dir }}
+          cache-from: type=local,src=/tmp/build-cache
           push: true
           provenance: mode=max
           sbom: true
@@ -176,6 +180,25 @@ jobs:
             org.opencontainers.image.base.name=${{ matrix.image.base }}
             io.fyannk.postgres.upstream-revision=${{ needs.detect.outputs.upstream }}
             io.fyannk.postgres.inputs=${{ steps.decide.outputs.fingerprint }}
+
+      # A cache miss between the two builds, for example a base image pushed in
+      # the minutes between them, would publish layers that were never checked.
+      # Compare the uncompressed layer digests so that cannot pass silently.
+      - name: Pushed image is the checked image
+        if: steps.decide.outputs.rebuild == 'true'
+        env:
+          PRIMARY: ${{ matrix.image.version }}-${{ matrix.image.variant }}
+        run: |
+          set -euo pipefail
+          checked="$(docker image inspect postgres-publish:candidate --format '{{json .RootFS.Layers}}' | jq -c .)"
+          pushed="$(docker buildx imagetools inspect "${REPO}:${PRIMARY}" --format '{{json .Image}}' | jq -c .rootfs.diff_ids)"
+          if [[ "${checked}" != "${pushed}" ]]; then
+            echo "::error::${REPO}:${PRIMARY} does not have the layers check-image.sh passed; rerun the publish"
+            echo "checked: ${checked}"
+            echo "pushed:  ${pushed}"
+            exit 1
+          fi
+          echo "Pushed layers match the checked candidate."
 
   # Prune untagged manifests that no tagged index references. Do not enable
   # delete-ghost-images: it can delete tagged release versions.
