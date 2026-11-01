@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:,">
+  <title>PostgreSQL without gosu: security report</title>
+  <meta name="description" content="The official PostgreSQL image rebuilt without gosu, scanned nightly next to upstream with grype and Trivy.">
+  <link rel="stylesheet" href="style.css">
+  <script src="report.js" defer></script>
+</head>
+<body>
+  <header class="page-head">
+    <p class="eyebrow"><a href="https://github.com/fyannk/postgres">fyannk/postgres</a></p>
+    <h1>PostgreSQL images without gosu</h1>
+    <p class="lede">
+      The official PostgreSQL image, rebuilt from upstream's own recipe with a
+      single change: the step-down from root to <code>postgres</code> uses the
+      distribution's <code>setpriv</code> instead of a bundled
+      <code>gosu</code> binary. Every night, both images are scanned side by
+      side with two scanners, and this page shows the result.
+    </p>
+    <p class="meta" id="meta">Loading the latest scan…</p>
+  </header>
+
+  <main>
+    <section aria-labelledby="why-title">
+      <h2 id="why-title">Why repackage</h2>
+      <div class="prose">
+        <p>
+          The official image ships <a href="https://github.com/tianon/gosu">gosu</a>
+          for one job: dropping from root to <code>postgres</code> once, at
+          startup. gosu is a separate Go program, downloaded at build time and
+          pinned to a release, and it carries the Go standard library it was
+          compiled with. Every vulnerability later found in that toolchain is
+          reported against every image that bundles it, and it stays there until
+          gosu is rebuilt and upstream moves to the new release. Distribution
+          updates cannot fix it.
+        </p>
+        <p>
+          <code>setpriv</code> does the same job and already comes with the
+          distribution: on Debian it is part of <code>util-linux</code>, which
+          every image contains anyway, and on Alpine it is a small package. It is
+          patched through the normal package updates that the nightly rebuild
+          picks up.
+        </p>
+        <p>
+          Nothing else changes. The Dockerfile, entrypoint, environment
+          variables, init scripts and tags are upstream's, so switching is a
+          matter of changing the registry prefix:
+        </p>
+        <pre><code>docker pull ghcr.io/fyannk/postgres:18</code></pre>
+      </div>
+    </section>
+
+    <section aria-labelledby="now-title">
+      <h2 id="now-title">Where things stand</h2>
+
+      <form class="filters" id="filters" aria-label="Report filters">
+        <fieldset class="segmented">
+          <legend>Scanner</legend>
+          <label><input type="radio" name="scanner" value="grype" checked> grype</label>
+          <label><input type="radio" name="scanner" value="trivy"> Trivy</label>
+        </fieldset>
+        <label class="check"><input type="checkbox" name="fixable"> Only findings with a fix</label>
+      </form>
+
+      <p class="muted scope" id="scope"></p>
+      <div class="tiles" id="tiles" aria-live="polite"></div>
+
+      <figure class="card" id="trend">
+        <figcaption>
+          <h3>Findings with a fix, over time</h3>
+          <p class="muted">Summed across every image, one point per nightly scan.</p>
+        </figcaption>
+        <ul class="legend" aria-label="Legend">
+          <li><span class="key key-line ours" aria-hidden="true"></span>Ours</li>
+          <li><span class="key key-line upstream" aria-hidden="true"></span>Upstream</li>
+        </ul>
+        <div class="chart" id="chart"></div>
+        <details class="table-view">
+          <summary>Show as a table</summary>
+          <div class="table-wrap"><table id="history-table"></table></div>
+        </details>
+      </figure>
+
+      <div class="card table-wrap">
+        <table id="overview">
+          <caption>Findings per image, for the selected scanner</caption>
+        </table>
+      </div>
+    </section>
+
+    <section aria-labelledby="images-title">
+      <h2 id="images-title">Image by image</h2>
+      <p class="muted">
+        Open an image to see every finding, split into those only in upstream's
+        image, only in ours, and in both.
+      </p>
+      <div id="images" class="images"></div>
+    </section>
+
+    <section aria-labelledby="method-title">
+      <h2 id="method-title">How this is measured</h2>
+      <div class="prose">
+        <ul>
+          <li>
+            <strong>Same inventory tool on both sides.</strong> Each image we
+            publish carries an SPDX SBOM produced by Syft at build time. For
+            upstream's image, Syft is run on the official image from Docker Hub
+            each night. Only <code>linux/amd64</code> is compared, the platform
+            published here.
+          </li>
+          <li>
+            <strong>Two scanners.</strong> grype scans those SBOMs, including
+            the Go standard library compiled into any Go binary (grype's default
+            skips that). Trivy scans the images themselves. They use different
+            vulnerability databases and severity sources, so their counts differ;
+            the gap between ours and upstream is what to compare.
+          </li>
+          <li>
+            <strong>"With a fix"</strong> means a fixed version of the affected
+            package exists. Those are the findings a rebuild can clear. The rest
+            are waiting on Debian, Alpine or upstream projects, for ours and
+            upstream alike.
+          </li>
+          <li>
+            <strong>Same version, same base.</strong> Each row compares the same
+            PostgreSQL release on the same Debian or Alpine release. The two
+            images are built at different times, so distribution package
+            versions can differ slightly between them.
+          </li>
+          <li>
+            Counts are one per advisory and package. Totals summed across
+            images count an advisory once for each image it appears in.
+          </li>
+        </ul>
+        <p id="downloads">
+          The raw data is public: <a href="data/latest.json">latest summary</a>,
+          <a href="data/history.json">history</a>, and the SBOM of each published
+          image, linked from its section above.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="page-foot">
+    <p>
+      Generated by <a href="https://github.com/fyannk/postgres/blob/main/.github/workflows/security-report.yml">a nightly workflow</a>.
+      Images are built from <a href="https://github.com/docker-library/postgres">docker-library/postgres</a>;
+      this project is not affiliated with it.
+    </p>
+  </footer>
+  <noscript><p class="noscript">This report needs JavaScript to render the scan data. The raw data is in <a href="data/latest.json">data/latest.json</a>.</p></noscript>
+</body>
+</html>

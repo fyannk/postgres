@@ -120,6 +120,23 @@ published image is tracked by a nightly-updated issue, and everything else is
 published to the repository's code scanning results rather than ignored. See
 [SECURITY.md](SECURITY.md).
 
+## Security report
+
+[fyannk.github.io/postgres](https://fyannk.github.io/postgres/) compares every
+published image with its official counterpart each night, using two scanners.
+Both sides are inventoried with Syft: ours from the SBOM attached when it is
+published, upstream by running Syft on the official image. grype scans those
+SBOMs and Trivy scans the images. The page shows findings with a fix, critical
+and high findings, and findings in bundled Go binaries, plus a trend over time
+and, per image, the findings only upstream has, only ours has, and both share.
+The data and our SBOMs are published alongside the page.
+
+[`security-report.yml`](.github/workflows/security-report.yml) runs after the
+nightly publish and on changes to [`site/`](site) or
+[`security-report.sh`](.github/scripts/security-report.sh). Docker Hub's
+anonymous pull limit can leave an upstream image unscanned for a night; setting
+the optional `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets avoids that.
+
 ## Release automation
 
 The nightly publish fetches upstream's default branch, patches every variant
