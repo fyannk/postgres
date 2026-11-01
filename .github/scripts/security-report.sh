@@ -101,8 +101,10 @@ scan() {
   digest="$(docker image inspect "${ref}" --format '{{json .RepoDigests}}' | jq -r '.[0] // "" | sub("^[^@]*@"; "")')"
   created="$(docker image inspect "${ref}" --format '{{.Created}}')"
 
+  # By digest, not tag: a publish moving the tag mid-run must not pair this
+  # image's scans with another image's SBOM.
   if [[ "${sbom_source}" == "attached" ]]; then
-    docker buildx imagetools inspect "${ref}" --format '{{json .SBOM.SPDX}}' > "${base}.spdx.json"
+    docker buildx imagetools inspect "${ref%:*}@${digest}" --format '{{json .SBOM.SPDX}}' > "${base}.spdx.json"
   else
     "${SYFT}" -q "docker:${ref}" -o "spdx-json=${base}.spdx.json"
   fi
@@ -165,12 +167,31 @@ jq -s --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg revision "${revisio
 
 # History keeps one aggregate row per day across all images, so the trend
 # reads at a glance. Today's row replaces an earlier run of the same day.
+# Only a 404 (the first deployment) starts it afresh: any other failure stops
+# the run, since publishing would overwrite the accumulated history.
 history="[]"
 if [[ -n "${HISTORY_URL:-}" ]]; then
-  history="$(curl -fsSL "${HISTORY_URL}" 2>/dev/null | jq -c 'if type == "array" then . else [] end' 2>/dev/null || echo '[]')"
+  status="$(curl -sSL -o "${work}/history.json" -w '%{http_code}' "${HISTORY_URL}")"
+  case "${status}" in
+    200)
+      if ! history="$(jq -ce 'if type == "array" then . else error("not an array") end' "${work}/history.json")"; then
+        echo "${HISTORY_URL} is not a valid history; not publishing over it" >&2
+        exit 1
+      fi
+      ;;
+    404) echo "No history at ${HISTORY_URL} yet; starting one." ;;
+    *)
+      echo "Fetching ${HISTORY_URL} failed with HTTP ${status}; not publishing over the history" >&2
+      exit 1
+      ;;
+  esac
 fi
+# Totals count only images scanned on both sides with that scanner, as the
+# page's tiles do, so one side failing a night does not skew the comparison.
 jq --argjson history "${history}" '
-  def totals($side; $scanner): [.images[] | .[$side].scans[$scanner] // empty]
+  def totals($side; $scanner): [.images[]
+      | select(.ours.scans[$scanner] and .upstream.scans[$scanner])
+      | .[$side].scans[$scanner]]
     | {total: (map(.total) | add // 0), fixable: (map(.fixable) | add // 0),
        critical: (map(.severity.critical) | add // 0), high: (map(.severity.high) | add // 0),
        images: length};
