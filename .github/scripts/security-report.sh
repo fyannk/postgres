@@ -142,7 +142,8 @@ for entry in "${entries[@]}"; do
   fi
   jq -n --argjson entry "${entry}" --slurpfile ours "${work}/ours-${name}.json" --slurpfile up "${work}/upstream-${name}.json" '
     {name: "\($entry.major)-\($entry.variant)", major: $entry.major, version: $entry.version,
-     variant: $entry.variant, ours: $ours[0], upstream: $up[0]}' > "${out}/data/images/${name}.json"
+     variant: $entry.variant, base: $entry.base, tags: ($entry.tags | split(" ")),
+     ours: $ours[0], upstream: $up[0]}' > "${out}/data/images/${name}.json"
   echo "::endgroup::"
 done
 
@@ -168,12 +169,13 @@ jq -s --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg revision "${revisio
   def side: if .error then {ref, digest, error} else
     {ref, digest, created, scans: (.findings | map_values(${summary}))} end;
   {generated: \$generated, upstream_revision: \$revision, tools: \$tools,
-   images: (sort_by(-(.major | tonumber? // 0), .variant) | map({name, major, version, variant,
+   images: (sort_by(-(.major | tonumber? // 0), .variant) | map({name, major, version, variant, base, tags,
      ours: (.ours | side), upstream: (.upstream | side)}))}
 " "${out}"/data/images/*.json > "${out}/data/latest.json"
 
-# History keeps one aggregate row per day across all images, so the trend
-# reads at a glance. Today's row replaces an earlier run of the same day.
+# History keeps one row per day with each image's counts, per side and
+# scanner; nothing is summed across images. Today's row replaces an earlier
+# run of the same day.
 # Only a 404 (the first deployment) starts it afresh: any other failure stops
 # the run, since publishing would overwrite the accumulated history.
 # The history stays in a file: a year of it is larger than a single command
@@ -199,20 +201,15 @@ if [[ -n "${HISTORY_URL:-}" ]]; then
       ;;
   esac
 fi
-# Totals count only images scanned on both sides with that scanner, as the
-# page's tiles do, so one side failing a night does not skew the comparison.
+# A side that could not be scanned that night is null, so the chart shows a
+# gap instead of a drop to zero.
 jq --slurpfile history "${history}" '
-  def totals($side; $scanner): [.images[]
-      | select(.ours.scans[$scanner] and .upstream.scans[$scanner])
-      | .[$side].scans[$scanner]]
-    | {total: (map(.total) | add // 0), fixable: (map(.fixable) | add // 0),
-       critical: (map(.severity.critical) | add // 0), high: (map(.severity.high) | add // 0),
-       images: length};
+  def counts: if .scans then .scans | map_values({total, fixable}) else null end;
   (.generated[0:10]) as $date
   | ($history[0] | map(select(.date != $date)))
     + [{date: $date,
-        ours: {grype: totals("ours"; "grype"), trivy: totals("ours"; "trivy")},
-        upstream: {grype: totals("upstream"; "grype"), trivy: totals("upstream"; "trivy")}}]
+        images: (.images | map({key: .name, value: {ours: (.ours | counts), upstream: (.upstream | counts)}})
+          | from_entries)}]
   | sort_by(.date) | .[-400:]
 ' "${out}/data/latest.json" > "${out}/data/history.json"
 

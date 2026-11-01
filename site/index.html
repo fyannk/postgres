@@ -72,51 +72,64 @@
       </div>
     </section>
 
-    <section aria-labelledby="now-title">
-      <h2 id="now-title">Where things stand</h2>
+    <section aria-labelledby="stable-title">
+      <h2 id="stable-title">Latest stable</h2>
+      <p class="muted" id="stable-intro">
+        The newest stable PostgreSQL release, ours next to the official image,
+        on each base.
+      </p>
 
-      <form class="filters" id="filters" aria-label="Report filters">
+      <form class="filters" id="filters" aria-label="Scanner">
         <fieldset class="segmented">
           <legend>Scanner</legend>
           <label><input type="radio" name="scanner" value="grype" checked> grype</label>
           <label><input type="radio" name="scanner" value="trivy"> Trivy</label>
         </fieldset>
-        <label class="check"><input type="checkbox" name="fixable"> Only findings with a fix</label>
       </form>
 
-      <p class="muted scope" id="scope"></p>
-      <div class="tiles" id="tiles" aria-live="polite"></div>
+      <div class="card table-wrap">
+        <table id="stable" class="severity-table"></table>
+      </div>
+      <p class="muted squares-key" id="squares-key"></p>
 
       <figure class="card" id="trend">
         <figcaption>
-          <h3>Findings with a fix, over time</h3>
-          <p class="muted">Summed across every image, one point per nightly scan.</p>
+          <h3 id="trend-title">Over time</h3>
+          <p class="muted" id="trend-note">One point per nightly scan.</p>
         </figcaption>
-        <ul class="legend" aria-label="Legend">
-          <li><span class="key key-line ours" aria-hidden="true"></span>Ours</li>
-          <li><span class="key key-line upstream" aria-hidden="true"></span>Upstream</li>
-        </ul>
+        <div class="trend-controls">
+          <ul class="legend" id="legend" aria-label="Legend"></ul>
+          <label class="check"><input type="checkbox" id="fixable"> Only findings with a fix</label>
+        </div>
         <div class="chart" id="chart"></div>
         <details class="table-view">
           <summary>Show as a table</summary>
           <div class="table-wrap"><table id="history-table"></table></div>
         </details>
       </figure>
+    </section>
 
+    <section aria-labelledby="all-title">
+      <h2 id="all-title">Every image</h2>
+      <p class="muted">
+        Every version and base built here, each scanned by both scanners, next
+        to the official image.
+      </p>
       <div class="card table-wrap">
-        <table id="overview">
-          <caption>Findings per image, for the selected scanner</caption>
-        </table>
+        <table id="all" class="severity-table"></table>
       </div>
     </section>
 
-    <section aria-labelledby="images-title">
-      <h2 id="images-title">Image by image</h2>
+    <section aria-labelledby="tags-title">
+      <h2 id="tags-title">Tags</h2>
       <p class="muted">
-        Open an image to see every finding, split into those only in upstream's
-        image, only in ours, and in both.
+        What each tag points to, as of the last scan. The same tags exist on
+        <code>ghcr.io/fyannk/postgres</code> and <code>docker.io/fyannk/postgres</code>,
+        and resolve to the same digest.
       </p>
-      <div id="images" class="images"></div>
+      <div class="card table-wrap">
+        <table id="tags"></table>
+      </div>
     </section>
 
     <section aria-labelledby="method-title">
@@ -153,14 +166,17 @@
             versions can differ slightly between them.
           </li>
           <li>
-            Counts are one per advisory and package. Totals summed across
-            images count an advisory once for each image it appears in.
+            Counts are one per advisory and package, per image. Nothing is
+            summed across images: an advisory present in five images is five
+            findings, so a total would mostly measure how many images there
+            are.
           </li>
         </ul>
         <p id="downloads">
           The raw data is public: <a href="data/latest.json">latest summary</a>,
-          <a href="data/history.json">history</a>, and the SBOM of each published
-          image, linked from its section above.
+          <a href="data/history.json">history</a>, and, for each image, every
+          finding and the SBOM of the published image, linked from the tags
+          table above.
         </p>
       </div>
     </section>

@@ -135,9 +135,10 @@ published to the repository's code scanning results rather than ignored. See
 published image with its official counterpart each night, using two scanners.
 Both sides are inventoried with Syft: ours from the SBOM attached when it is
 published, upstream by running Syft on the official image. grype scans those
-SBOMs and Trivy scans the images. The page shows findings with a fix, critical
-and high findings, and findings in bundled Go binaries, plus a trend over time
-and, per image, the findings only upstream has, only ours has, and both share.
+SBOMs and Trivy scans the images. For each image, side and scanner, the page
+shows every severity as "with a fix / all findings"; nothing is summed across
+images. It leads with the latest stable release on Debian and Alpine, with
+its trend over time, and lists every tag with the digest it points to.
 The page also records when each scanner's advisory database was built, and
 flags one built more than two days before the scan, since a clean result is
 only as current as that database. The data and our SBOMs are published

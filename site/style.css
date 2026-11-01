@@ -129,37 +129,21 @@ h3 { font-size: var(--fy-text-md); margin: 0; }
 .segmented label:has(input:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
 .check { display: inline-flex; gap: 0.45rem; align-items: center; font-size: 0.95rem; cursor: pointer; }
 
-/* Stat tiles */
-.tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1rem;
-  margin: 0 0 1.25rem;
-}
-.tile {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1rem 1.1rem;
-}
-.tile h3 { font-size: 0.92rem; font-weight: 500; color: var(--text-2); margin-bottom: 0.6rem; }
-.tile dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; align-items: baseline; }
-.tile dt { display: flex; align-items: center; gap: 0.45rem; color: var(--text-2); font-size: 0.9rem; }
-.tile dd { margin: 0; text-align: right; }
-.tile dd { font-family: var(--mono); font-variant-numeric: tabular-nums; }
-.tile dd.big { font-size: var(--fy-text-2xl); font-weight: 600; line-height: 1.2; }
-.tile dd.small { font-size: 1.05rem; color: var(--text-2); }
-
 .key { display: inline-block; flex: none; }
 .key-dot { width: 10px; height: 10px; border-radius: var(--fy-radius-sm); }
 .key-line { width: 16px; height: 2px; border-radius: 1px; vertical-align: middle; }
 .ours.key-dot, .ours.key-line { background: var(--ours); }
 .upstream.key-dot, .upstream.key-line { background: var(--upstream); }
+/* Alpine is dashed, Debian solid: the line style carries the base. */
+.key-line.alt { width: 18px; }
+.ours.key-line.alt { background: repeating-linear-gradient(90deg, var(--ours) 0 5px, transparent 5px 8px); }
+.upstream.key-line.alt { background: repeating-linear-gradient(90deg, var(--upstream) 0 5px, transparent 5px 8px); }
 
 /* Trend chart */
 figure.card { margin: 0 0 1.25rem; }
 figcaption p { margin: 0.2rem 0 0; }
-.legend { display: flex; gap: 1.25rem; list-style: none; padding: 0; margin: 0.9rem 0 0.25rem; font-size: 0.9rem; color: var(--text-2); }
+.trend-controls { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: var(--fy-space-2) var(--fy-space-6); margin: var(--fy-space-4) 0 var(--fy-space-1); }
+.legend { display: flex; flex-wrap: wrap; gap: var(--fy-space-2) 1.25rem; list-style: none; padding: 0; margin: 0; font-size: 0.9rem; color: var(--text-2); }
 .legend li { display: flex; align-items: center; gap: 0.45rem; }
 .chart { position: relative; min-height: 15rem; }
 .chart svg { display: block; width: 100%; height: auto; overflow: visible; }
@@ -171,6 +155,7 @@ figcaption p { margin: 0.2rem 0 0; }
 .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .series.ours { stroke: var(--ours); }
 .chart .series.upstream { stroke: var(--upstream); }
+.chart .series.alt { stroke-dasharray: 6 4; }
 .chart .dot { stroke: var(--surface); stroke-width: 2; }
 .chart .dot.ours { fill: var(--ours); }
 .chart .dot.upstream { fill: var(--upstream); }
@@ -209,33 +194,6 @@ td.na { color: var(--muted); }
 tbody tr:hover { background: var(--wash); }
 td.wrap { white-space: normal; }
 
-/* Image detail */
-.images { display: grid; gap: 0.75rem; }
-.image {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.image > summary {
-  cursor: pointer;
-  padding: 0.9rem 1.1rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 1rem;
-  align-items: baseline;
-}
-.image > summary .name { font-weight: 600; font-family: var(--mono); }
-.image > summary .figures { color: var(--text-2); font-size: 0.92rem; }
-.image[open] > summary { border-bottom: 1px solid var(--grid); }
-.image .body { padding: 1rem 1.1rem 1.25rem; }
-.image h4 { margin: 1.5rem 0 0.5rem; font-size: 0.98rem; }
-.image h4:first-of-type { margin-top: 1rem; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr)); gap: 0.5rem 1.5rem; font-size: 0.88rem; color: var(--text-2); margin: 0; }
-.facts dt { display: flex; align-items: center; gap: 0.45rem; color: var(--text); font-weight: 600; }
-.facts dd { margin: 0 0 0.5rem; overflow-wrap: anywhere; }
-.facts code { font-size: 0.85em; }
-.more summary { cursor: pointer; margin: 1.5rem 0 0.5rem; font-weight: 600; font-size: 0.98rem; }
-
 .page-foot { margin-top: 4rem; color: var(--text-2); font-size: 0.88rem; border-top: 1px solid var(--grid); padding-top: 1rem; }
 .noscript { background: var(--surface); border: 1px solid var(--border); padding: 1rem; border-radius: var(--radius); }
 
@@ -250,3 +208,80 @@ td.wrap { white-space: normal; }
 .status.stale::before { content: "\25CB"; }
 .status.ok::before { content: "\25CF"; color: var(--fy-ok); }
 .status.warn::before { content: "\25B2"; color: var(--fy-warn); }
+
+/* Visually hidden, read by screen readers. */
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* Severity squares: with a fix / all findings, filled by severity. Every fill
+   keeps its text at 4.7:1 or more; the light fills closest to the surface
+   carry a border. */
+:root {
+  --sev-critical: #a57be0; --sev-critical-ink: var(--fy-ink-950);
+  --sev-high: #ec6a55;     --sev-high-ink: var(--fy-ink-950);
+  --sev-medium: #e3a83f;   --sev-medium-ink: var(--fy-ink-950);
+  --sev-low: #d6cf7a;      --sev-low-ink: var(--fy-ink-950);
+  --sev-other: var(--fy-ink-600); --sev-other-ink: var(--fy-ermine-200);
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --sev-critical: #6b3fb3; --sev-critical-ink: var(--fy-ermine-50);
+    --sev-high: #b8371f;     --sev-high-ink: var(--fy-ermine-50);
+    --sev-medium: #a0620a;   --sev-medium-ink: var(--fy-ermine-50);
+    --sev-low: #ece08a;      --sev-low-ink: #14200f;
+    --sev-other: #e3e2d6;    --sev-other-ink: #14200f;
+  }
+}
+:root[data-theme="light"] {
+  --sev-critical: #6b3fb3; --sev-critical-ink: var(--fy-ermine-50);
+  --sev-high: #b8371f;     --sev-high-ink: var(--fy-ermine-50);
+  --sev-medium: #a0620a;   --sev-medium-ink: var(--fy-ermine-50);
+  --sev-low: #ece08a;      --sev-low-ink: #14200f;
+  --sev-other: #e3e2d6;    --sev-other-ink: #14200f;
+}
+
+.sq {
+  display: inline-block;
+  min-width: 4.5rem;
+  padding: 2px var(--fy-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--fy-radius-sm);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  position: relative;
+}
+.sq.has-fix { font-weight: 600; }
+.sq.none { color: var(--fy-text-faint); border-color: var(--grid); }
+.sq.sev-critical { background: var(--sev-critical); color: var(--sev-critical-ink); }
+.sq.sev-high { background: var(--sev-high); color: var(--sev-high-ink); }
+.sq.sev-medium { background: var(--sev-medium); color: var(--sev-medium-ink); }
+.sq.sev-low { background: var(--sev-low); color: var(--sev-low-ink); border-color: color-mix(in srgb, var(--sev-low-ink) 18%, transparent); }
+.sq.sev-other { background: var(--sev-other); color: var(--sev-other-ink); border-color: color-mix(in srgb, var(--sev-other-ink) 12%, transparent); }
+.squares-key { margin: var(--fy-space-2) 0 var(--fy-space-6); line-height: 1.9; }
+.squares-key .sq { min-width: 0; padding: 0 var(--fy-space-1); }
+
+.severity-table th.sev, .severity-table td.sev { text-align: center; }
+.severity-table td.sev { padding: 3px var(--fy-space-1); }
+.severity-table tbody + tbody { border-top: 1px solid var(--axis); }
+.severity-table tbody th[scope="rowgroup"], .severity-table tbody td[rowspan] { vertical-align: top; }
+td.all { color: var(--text-2); }
+th.version { font-weight: 600; }
+.source { display: inline-flex; align-items: center; gap: 0.45rem; font-weight: 500; }
+td.scanner { color: var(--text-2); }
+
+#tags td.wrap { white-space: normal; }
+code.tag {
+  display: inline-block;
+  margin: 2px var(--fy-space-1) 2px 0;
+  padding: 0 var(--fy-space-1);
+  border: 1px solid var(--border);
+  border-radius: var(--fy-radius-sm);
+  background: var(--fy-raised);
+  font-size: var(--fy-text-sm);
+}
+td.links { white-space: nowrap; }
+
+@media (forced-colors: active) {
+  .sq { border-color: CanvasText; forced-color-adjust: none; }
+}
