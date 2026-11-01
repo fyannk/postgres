@@ -64,6 +64,10 @@ jobs:
     env:
       DIR: ${{ matrix.image.dir }}
       REPO: ghcr.io/${{ github.repository_owner }}/postgres
+      # Docker Hub is a second, optional destination: without the two secrets
+      # images go to GHCR only.
+      HUB_REPO: docker.io/${{ github.repository_owner }}/postgres
+      HUB_ENABLED: ${{ secrets.DOCKERHUB_USERNAME != '' && secrets.DOCKERHUB_TOKEN != '' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
@@ -83,6 +87,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: env.HUB_ENABLED == 'true'
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Decide whether the image needs a rebuild
         id: decide
@@ -110,35 +121,55 @@ jobs:
           fingerprint="$(sha256sum /tmp/build-inputs.txt | cut -d' ' -f1)"
           echo "fingerprint=${fingerprint}" >> "${GITHUB_OUTPUT}"
 
-          image_json="$(
-            docker buildx imagetools inspect "${REPO}:${PRIMARY}" \
-              --format '{{ json .Image }}' 2>/dev/null || true
-          )"
-          published=""
-          age_days=99999
-          if [[ -n "${image_json}" ]]; then
-            published="$(jq -r '.config.Labels["io.fyannk.postgres.inputs"] // empty' <<<"${image_json}")"
-            created="$(jq -r '.created // empty' <<<"${image_json}")"
-            if [[ -n "${created}" ]]; then
-              age_days=$(( ( $(date -u +%s) - $(date -u -d "${created}" +%s) ) / 86400 ))
+          repos=("${REPO}")
+          if [[ "${HUB_ENABLED}" == "true" ]]; then repos+=("${HUB_REPO}"); fi
+
+          # Every registry must carry the current fingerprint and be fresh;
+          # one that is behind, or newly added, rebuilds and pushes to all, so
+          # they always serve the same image.
+          rebuild=false
+          for target in "${repos[@]}"; do
+            image_json="$(
+              docker buildx imagetools inspect "${target}:${PRIMARY}" \
+                --format '{{ json .Image }}' 2>/dev/null || true
+            )"
+            published=""
+            age_days=99999
+            if [[ -n "${image_json}" ]]; then
+              published="$(jq -r '.config.Labels["io.fyannk.postgres.inputs"] // empty' <<<"${image_json}")"
+              created="$(jq -r '.created // empty' <<<"${image_json}")"
+              if [[ -n "${created}" ]]; then
+                age_days=$(( ( $(date -u +%s) - $(date -u -d "${created}" +%s) ) / 86400 ))
+              fi
             fi
+
+            echo "${target}:${PRIMARY}"
+            echo "  published fingerprint: ${published:-<none>}"
+            echo "  current fingerprint:   ${fingerprint}"
+            echo "  published age:         ${age_days} day(s)"
+            if [[ "${published}" != "${fingerprint}" || "${age_days}" -ge "${MAX_IMAGE_AGE_DAYS}" ]]; then
+              rebuild=true
+            fi
+          done
+
+          if [[ "${FORCE}" == "true" ]]; then
+            rebuild=true
           fi
-
-          echo "published fingerprint: ${published:-<none>}"
-          echo "current fingerprint:   ${fingerprint}"
-          echo "published age:         ${age_days} day(s)"
-
-          if [[ "${FORCE}" != "true" && "${published}" == "${fingerprint}" && "${age_days}" -lt "${MAX_IMAGE_AGE_DAYS}" ]]; then
-            echo "rebuild=false" >> "${GITHUB_OUTPUT}"
-            echo "No input changed and the published image is still fresh; skipping."
-          else
-            echo "rebuild=true" >> "${GITHUB_OUTPUT}"
+          echo "rebuild=${rebuild}" >> "${GITHUB_OUTPUT}"
+          if [[ "${rebuild}" == "true" ]]; then
             echo "Rebuilding."
+          else
+            echo "No input changed and every published image is still fresh; skipping."
           fi
 
           {
+            echo "repos=${repos[*]}"
+            names="${repos[*]}"
+            echo "names=${names// /,}"
             echo "tags<<EOF"
-            for tag in ${TAGS}; do echo "${REPO}:${tag}"; done
+            for target in "${repos[@]}"; do
+              for tag in ${TAGS}; do echo "${target}:${tag}"; done
+            done
             echo "EOF"
           } >> "${GITHUB_OUTPUT}"
 
@@ -168,7 +199,7 @@ jobs:
         with:
           context: ./upstream/${{ matrix.image.dir }}
           cache-from: type=local,src=/tmp/build-cache
-          outputs: type=image,name=${{ env.REPO }},push-by-digest=true,name-canonical=true,push=true
+          outputs: type=image,"name=${{ steps.decide.outputs.names }}",push-by-digest=true,name-canonical=true,push=true
           provenance: mode=max
           sbom: true
           labels: |
@@ -193,54 +224,87 @@ jobs:
         if: steps.decide.outputs.rebuild == 'true'
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
+          REPOS: ${{ steps.decide.outputs.repos }}
         run: |
           set -euo pipefail
           runtime='{Env, Entrypoint, Cmd, User, WorkingDir, ExposedPorts, Volumes, StopSignal}
             | map_values(if . == null or . == "" or . == [] or . == {} then null else . end)'
           checked="$(docker image inspect postgres-publish:candidate --format '{{json .}}' \
             | jq -cS "{layers: .RootFS.Layers, config: (.Config | ${runtime})}")"
-          pushed="$(docker buildx imagetools inspect "${REPO}@${DIGEST}" --format '{{json .Image}}' \
-            | jq -cS "{layers: .rootfs.diff_ids, config: (.config | ${runtime})}")"
-          if [[ "${checked}" != "${pushed}" ]]; then
-            echo "::error::${REPO}@${DIGEST} differs from the image check-image.sh passed; its tags were not moved"
-            echo "checked: ${checked}"
-            echo "pushed:  ${pushed}"
-            exit 1
-          fi
-          echo "${REPO}@${DIGEST} matches the checked candidate."
+          for target in ${REPOS}; do
+            pushed="$(docker buildx imagetools inspect "${target}@${DIGEST}" --format '{{json .Image}}' \
+              | jq -cS "{layers: .rootfs.diff_ids, config: (.config | ${runtime})}")"
+            if [[ "${checked}" != "${pushed}" ]]; then
+              echo "::error::${target}@${DIGEST} differs from the image check-image.sh passed; no tag was moved"
+              echo "checked: ${checked}"
+              echo "pushed:  ${pushed}"
+              exit 1
+            fi
+            echo "${target}@${DIGEST} matches the checked candidate."
+          done
 
       # The tags are pointed at the verified digest itself, so what they serve
-      # is exactly what was compared above, attestations included.
+      # is exactly what was compared above, attestations included. Each
+      # registry's tags are created from its own copy of that digest.
       - name: Move the release tags to the verified image
         if: steps.decide.outputs.rebuild == 'true'
         env:
           DIGEST: ${{ steps.push.outputs.digest }}
+          REPOS: ${{ steps.decide.outputs.repos }}
           TAGS: ${{ steps.decide.outputs.tags }}
         run: |
           set -euo pipefail
-          args=()
-          while IFS= read -r tag; do
-            [[ -n "${tag}" ]] && args+=(--tag "${tag}")
-          done <<<"${TAGS}"
-          docker buildx imagetools create "${args[@]}" "${REPO}@${DIGEST}"
+          for target in ${REPOS}; do
+            args=()
+            while IFS= read -r tag; do
+              [[ "${tag}" == "${target}:"* ]] && args+=(--tag "${tag}")
+            done <<<"${TAGS}"
+            docker buildx imagetools create "${args[@]}" "${target}@${DIGEST}"
+          done
           for tag in ${TAGS}; do
             resolved="$(docker buildx imagetools inspect "${tag}" --format '{{json .Manifest}}' | jq -r .digest)"
             [[ "${resolved}" == "${DIGEST}" ]] || { echo "::error::${tag} resolves to ${resolved}, expected ${DIGEST}"; exit 1; }
             echo "${tag} -> ${DIGEST}"
           done
 
-  # Prune untagged manifests that no tagged index references. Do not enable
-  # delete-ghost-images: it can delete tagged release versions.
+  # Prune untagged manifests that no tagged index references, once they have
+  # been untagged for a week: an image replaced by a newer push stays
+  # pullable by digest long enough for anyone pinning it to move on. Do not
+  # enable delete-ghost-images: it can delete tagged release versions.
   prune:
-    name: Prune orphaned GHCR manifests
+    name: Prune replaced images
     needs: publish
     if: always() && needs.publish.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
+    env:
+      GRACE_DAYS: "7"
     steps:
-      - uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: GHCR
+        uses: dataaxiom/ghcr-cleanup-action@d52806a0dc70b430571a37da1fde39733ffd640f # v1.2.2
         with:
           package: ${{ env.IMAGE_NAME }}
           delete-untagged: true
+          older-than: ${{ env.GRACE_DAYS }} days
           validate: true
+
+      # The Hub manifests API this relies on is not in Docker's published
+      # reference, so a failure here warns instead of failing the publish.
+      - name: Docker Hub
+        if: always()
+        continue-on-error: true
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${DOCKERHUB_USERNAME}" || -z "${DOCKERHUB_TOKEN}" ]]; then
+            echo "Docker Hub is not configured; nothing to prune."
+            exit 0
+          fi
+          .github/scripts/prune-dockerhub.sh "${OWNER}/${IMAGE_NAME}" "${GRACE_DAYS}"
