@@ -1,7 +1,7 @@
 <!--
 Thanks for contributing. Keep one focused change per PR. This repository ships
 a patch over docker-library/postgres, not a fork of it: the patch script is the
-source of truth and the README explains what the resulting images guarantee.
+source of truth and docs/ explains what the resulting images guarantee.
 -->
 
 ## What and why
@@ -25,4 +25,5 @@ source of truth and the README explains what the resulting images guarantee.
 - [ ] Started as root, the server and init scripts run as `postgres` with its
       supplementary groups and `HOME`
 - [ ] Everything else is upstream's recipe, unchanged
-- [ ] README updated if the tags, guarantees, or release automation changed
+- [ ] docs/ (and the README, if the pitch changed) updated if the tags,
+      guarantees, or release automation changed
