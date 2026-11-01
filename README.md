@@ -84,9 +84,12 @@ Pre-releases never take `latest` or the bare variant tags.
 
 ```text
 docker pull ghcr.io/fyannk/postgres:18
+docker pull fyannk/postgres:18
 ```
 
-Images are published to GHCR only, for `linux/amd64`.
+Images are published to GHCR and Docker Hub, for `linux/amd64`. Both
+registries receive the same push, so a tag resolves to the same image digest
+on either.
 
 ## Local builds
 
@@ -143,8 +146,19 @@ recorded as `io.fyannk.postgres.upstream-revision`.
 
 A manual run can pin an upstream commit and force a full rebuild.
 
-After each publish the workflow prunes only untagged GHCR manifests that no
-tagged index references. Tagged images are retained.
+An image replaced by a newer push stays in both registries, untagged and
+pullable by digest, for seven days. After that, the cleanup that runs after
+each publish deletes it: on GHCR through
+[ghcr-cleanup-action](https://github.com/dataaxiom/ghcr-cleanup-action), on
+Docker Hub through [`prune-dockerhub.sh`](.github/scripts/prune-dockerhub.sh).
+Tagged images, including older release tags such as `18.5-trixie`, are never
+deleted. Docker Hub's manifest API is not part of Docker's published
+reference, so a failed Hub cleanup is reported as a warning rather than
+failing the publish.
+
+Docker Hub is optional: it is used when the `DOCKERHUB_USERNAME` and
+`DOCKERHUB_TOKEN` secrets are set (a personal access token with read, write
+and delete access), and the publish goes to GHCR only otherwise.
 
 ## Merge automation
 
