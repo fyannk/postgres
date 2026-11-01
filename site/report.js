@@ -141,7 +141,7 @@ function renderOverview() {
     for (const side of SIDES) {
       const s = scans(image, side.key);
       if (!s) {
-        row.append(el("td", { class: "na", colspan: String(cols.length), text: unavailable(side.key, image[side.key]) }));
+        row.append(el("td", { class: "na status stale", colspan: String(cols.length), text: unavailable(side.key, image[side.key]) }));
         continue;
       }
       const values = { total: s.total, fixable: s.fixable, ch: critHigh(s, state.fixableOnly), go: s.go };
@@ -352,7 +352,7 @@ function renderDetailBody(image, body) {
     const parts = [el("code", { text: info.ref })];
     if (info.digest) parts.push(el("br"), el("code", { text: info.digest }));
     if (info.created) parts.push(el("br"), `built ${shortDate(info.created)}`);
-    if (info.error) parts.push(el("br"), unavailable(side.key, info));
+    if (info.error) parts.push(el("br"), el("span", { class: "status stale", text: unavailable(side.key, info) }));
     if (side.key === "ours" && !info.error) parts.push(el("br"), el("a", { href: `sboms/${encodeURIComponent(image.name)}.spdx.json`, text: "SBOM (SPDX JSON)" }));
     facts.append(el("div", {}, el("dt", {}, key(side.key), side.label), el("dd", {}, parts)));
   }

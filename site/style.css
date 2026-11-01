@@ -1,41 +1,31 @@
-/* Light values first; the dark set swaps the same roles in one place. */
+/* Page roles mapped onto the fyannk design tokens (tokens.css, dark first). */
+@font-face { font-family: "IBM Plex Mono"; font-weight: 500; font-display: swap; src: url("fonts/ibm-plex-mono-500-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-weight: 600; font-display: swap; src: url("fonts/ibm-plex-mono-600-latin.woff2") format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-weight: 400 600; font-display: swap; src: url("fonts/ibm-plex-sans-latin.woff2") format("woff2"); }
+
 :root {
-  color-scheme: light dark;
+  --page: var(--fy-bg);
+  --surface: var(--fy-surface);
+  --text: var(--fy-text);
+  --text-2: var(--fy-text-muted);
+  --muted: var(--fy-text-muted);
+  --grid: var(--fy-border);
+  --axis: var(--fy-border-strong);
+  --border: var(--fy-border);
+  --wash: var(--fy-accent-soft);
+  --link: var(--fy-accent);
+  /* Ours is the highlighted series, upstream the neutral one. */
+  --ours: var(--fy-accent);
+  --upstream: var(--fy-ermine-500);
 
-  --page: #f9f9f7;
-  --surface: #fcfcfb;
-  --text: #0b0b0b;
-  --text-2: #52514e;
-  --muted: #6f6d68;
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
-  --border: rgba(11, 11, 11, 0.10);
-  --wash: rgba(11, 11, 11, 0.04);
-  --link: #1c5cab;
-  --ours: #2a78d6;
-  --upstream: #eb6834;
-
-  --radius: 10px;
-  --font: system-ui, -apple-system, "Segoe UI", sans-serif;
-  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  --radius: var(--fy-radius-md);
+  --font: var(--fy-font-sans);
+  --mono: var(--fy-font-mono);
 }
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --page: #0d0d0d;
-    --surface: #1a1a19;
-    --text: #f0efec;
-    --text-2: #c3c2b7;
-    --muted: #898781;
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --border: rgba(255, 255, 255, 0.10);
-    --wash: rgba(255, 255, 255, 0.05);
-    --link: #86b6ef;
-    --ours: #3987e5;
-    --upstream: #d95926;
-  }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) { --upstream: #8a9180; }
 }
+:root[data-theme="light"] { --upstream: #8a9180; }
 
 * { box-sizing: border-box; }
 
@@ -62,11 +52,18 @@ pre {
   overflow-x: auto;
 }
 
-h1 { font-size: clamp(1.9rem, 4vw, 2.6rem); line-height: 1.15; margin: 0.25rem 0 1rem; letter-spacing: -0.01em; }
-h2 { font-size: 1.45rem; margin: 3.5rem 0 1rem; }
-h3 { font-size: 1.05rem; margin: 0; }
+h1, h2, h3, h4 { font-family: var(--mono); font-weight: 600; letter-spacing: -0.01em; }
+h1 { font-size: clamp(var(--fy-text-2xl), 4vw, var(--fy-text-3xl)); line-height: 1.15; margin: var(--fy-space-4) 0 var(--fy-space-4); }
+h2 { font-size: var(--fy-text-xl); margin: var(--fy-space-12) 0 var(--fy-space-4); }
+h3 { font-size: var(--fy-text-md); margin: 0; }
 
-.eyebrow { margin: 0; font-size: 0.9rem; }
+/* Wordmark: Plex Mono 600 with the accent block cursor. */
+.wordmark { font-family: var(--mono); font-weight: 600; font-size: var(--fy-text-lg); color: var(--text); text-decoration: none; }
+.wordmark::after { content: "\258D"; color: var(--fy-accent); }
+.wordmark:hover { color: var(--text); }
+
+.eyebrow { margin: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--fy-space-2) var(--fy-space-4); }
+.eyebrow .repo { font-family: var(--mono); font-weight: 500; font-size: var(--fy-text-sm); color: var(--text-2); }
 .lede { font-size: 1.12rem; color: var(--text-2); max-width: 46rem; margin: 0 0 1rem; }
 .meta, .muted { color: var(--text-2); font-size: 0.92rem; }
 .meta { margin: 0; }
@@ -93,8 +90,8 @@ h3 { font-size: 1.05rem; margin: 0; }
 .segmented {
   display: inline-flex;
   border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px;
+  border-radius: var(--fy-radius-md);
+  padding: 2px;
   margin: 0;
   background: var(--surface);
 }
@@ -110,9 +107,11 @@ h3 { font-size: 1.05rem; margin: 0; }
 .segmented label {
   position: relative;
   padding: 0.3rem 0.95rem;
-  border-radius: 999px;
+  border-radius: var(--fy-radius-sm);
   cursor: pointer;
-  font-size: 0.95rem;
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: var(--fy-text-sm);
 }
 .segmented input {
   position: absolute;
@@ -123,8 +122,8 @@ h3 { font-size: 1.05rem; margin: 0; }
 }
 .segmented label:hover { background: var(--wash); }
 .segmented label:has(input:checked) {
-  background: var(--text);
-  color: var(--surface);
+  background: var(--fy-accent);
+  color: var(--fy-accent-ink);
   font-weight: 600;
 }
 .segmented label:has(input:focus-visible) { outline: 2px solid var(--link); outline-offset: 2px; }
@@ -147,11 +146,12 @@ h3 { font-size: 1.05rem; margin: 0; }
 .tile dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 0.2rem 0.6rem; align-items: baseline; }
 .tile dt { display: flex; align-items: center; gap: 0.45rem; color: var(--text-2); font-size: 0.9rem; }
 .tile dd { margin: 0; text-align: right; }
-.tile dd.big { font-size: 1.9rem; font-weight: 600; line-height: 1.2; }
+.tile dd { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tile dd.big { font-size: var(--fy-text-2xl); font-weight: 600; line-height: 1.2; }
 .tile dd.small { font-size: 1.05rem; color: var(--text-2); }
 
 .key { display: inline-block; flex: none; }
-.key-dot { width: 10px; height: 10px; border-radius: 3px; }
+.key-dot { width: 10px; height: 10px; border-radius: var(--fy-radius-sm); }
 .key-line { width: 16px; height: 2px; border-radius: 1px; vertical-align: middle; }
 .ours.key-dot, .ours.key-line { background: var(--ours); }
 .upstream.key-dot, .upstream.key-line { background: var(--upstream); }
@@ -166,8 +166,8 @@ figcaption p { margin: 0.2rem 0 0; }
 .chart svg:focus-visible { outline: 2px solid var(--link); outline-offset: 4px; border-radius: 4px; }
 .chart .grid { stroke: var(--grid); stroke-width: 1; }
 .chart .baseline { stroke: var(--axis); stroke-width: 1; }
-.chart .tick { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
-.chart .end-label { fill: var(--text-2); font-size: 12px; }
+.chart .tick { fill: var(--muted); font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
+.chart .end-label { fill: var(--text-2); font-family: var(--mono); font-size: 12px; }
 .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .series.ours { stroke: var(--ours); }
 .chart .series.upstream { stroke: var(--upstream); }
@@ -181,8 +181,8 @@ figcaption p { margin: 0.2rem 0 0; }
   pointer-events: none;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  border-radius: var(--fy-radius-md);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
   padding: 0.5rem 0.7rem;
   font-size: 0.85rem;
   min-width: 9rem;
@@ -190,16 +190,18 @@ figcaption p { margin: 0.2rem 0 0; }
 .tooltip[hidden] { display: none; }
 .tooltip .date { color: var(--text-2); margin-bottom: 0.25rem; }
 .tooltip .row { display: flex; align-items: center; gap: 0.5rem; }
-.tooltip strong { font-variant-numeric: tabular-nums; }
+.tooltip strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .table-view { margin-top: 0.75rem; }
 .table-view summary { cursor: pointer; color: var(--text-2); font-size: 0.9rem; }
 
 /* Tables */
 .table-wrap { overflow-x: auto; }
-table { border-collapse: collapse; width: 100%; font-size: 0.92rem; }
+table { border-collapse: collapse; width: 100%; font-family: var(--mono); font-weight: 500; font-size: var(--fy-text-sm); }
+caption { font-family: var(--font); font-weight: 400; }
 caption { text-align: left; color: var(--text-2); font-size: 0.9rem; padding-bottom: 0.6rem; }
 th, td { padding: 0.45rem 0.6rem; text-align: left; border-bottom: 1px solid var(--grid); white-space: nowrap; }
 thead th { color: var(--text-2); font-weight: 500; }
+tbody th { font-weight: 600; }
 thead tr.group th { border-bottom: 0; padding-bottom: 0; }
 thead tr.group th span { display: inline-flex; align-items: center; gap: 0.45rem; }
 td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
@@ -240,3 +242,10 @@ td.wrap { white-space: normal; }
 @media (forced-colors: active) {
   .key-dot, .key-line, .segmented label:has(input:checked) { forced-color-adjust: none; }
 }
+
+/* Status: glyph plus word, never colour alone. */
+.status { white-space: nowrap; }
+.status::before { margin-right: 0.4em; }
+.status.stale { color: var(--text-2); }
+.status.stale::before { content: "\25CB"; }
+.status.ok::before { content: "\25CF"; color: var(--fy-ok); }
