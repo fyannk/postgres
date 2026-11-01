@@ -151,10 +151,17 @@ if ! compgen -G "${out}/data/images/*.json" >/dev/null; then
   exit 1
 fi
 
+# Each scanner's database build time is recorded next to its version: a clean
+# result is only as current as the advisories it was matched against. Both
+# databases are in place by now, downloaded by the first scan.
+trivy_version="$("${TRIVY}" --version -f json)"
 tools="$(jq -n --arg grype "$("${GRYPE}" version -o json | jq -r .version)" \
-  --arg trivy "$("${TRIVY}" --version -f json | jq -r .Version)" \
+  --arg grype_db "$("${GRYPE}" db status -o json | jq -r '.built // empty')" \
+  --arg trivy "$(jq -r .Version <<<"${trivy_version}")" \
+  --arg trivy_db "$(jq -r '.VulnerabilityDB.UpdatedAt // empty' <<<"${trivy_version}")" \
   --arg syft "$("${SYFT}" version -o json | jq -r .version)" \
-  '{grype: $grype, trivy: $trivy, syft: $syft}')"
+  'def date: if . == "" then null else . end;
+  {grype: $grype, grype_db: ($grype_db | date), trivy: $trivy, trivy_db: ($trivy_db | date), syft: $syft}')"
 
 # The summary drops the finding lists, which stay in the per-image files.
 jq -s --arg generated "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg revision "${revision}" --argjson tools "${tools}" "

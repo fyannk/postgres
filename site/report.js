@@ -68,7 +68,25 @@ function renderMeta() {
     " · upstream recipe ",
     el("a", { href: `https://github.com/docker-library/postgres/tree/${rev}`, text: rev.slice(0, 7) }),
     ` · grype ${tools.grype}, Trivy ${tools.trivy}, Syft ${tools.syft}`,
+    el("br"),
+    "Advisory databases: ",
+    databaseAge("grype", tools.grype_db, generated),
+    " · ",
+    databaseAge("Trivy", tools.trivy_db, generated),
   );
+}
+
+// A database more than two days older than the scan has missed updates both
+// publish daily, so the result is flagged rather than shown as current.
+const STALE_DB_MS = 2 * 24 * 60 * 60 * 1000;
+
+function databaseAge(scanner, built, scanned) {
+  if (!built) return el("span", { class: "status stale", text: `${scanner} build time unknown` });
+  const when = new Date(built);
+  const label = `${scanner} built ${when.toLocaleString("en", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" })} UTC`;
+  const time = el("time", { datetime: built, text: label });
+  if (new Date(scanned) - when <= STALE_DB_MS) return time;
+  return el("span", { class: "status warn" }, time, ", more than two days before the scan");
 }
 
 // --- Stat tiles ---------------------------------------------------------------

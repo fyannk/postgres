@@ -249,3 +249,4 @@ td.wrap { white-space: normal; }
 .status.stale { color: var(--text-2); }
 .status.stale::before { content: "\25CB"; }
 .status.ok::before { content: "\25CF"; color: var(--fy-ok); }
+.status.warn::before { content: "\25B2"; color: var(--fy-warn); }

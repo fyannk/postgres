@@ -138,7 +138,10 @@ published, upstream by running Syft on the official image. grype scans those
 SBOMs and Trivy scans the images. The page shows findings with a fix, critical
 and high findings, and findings in bundled Go binaries, plus a trend over time
 and, per image, the findings only upstream has, only ours has, and both share.
-The data and our SBOMs are published alongside the page.
+The page also records when each scanner's advisory database was built, and
+flags one built more than two days before the scan, since a clean result is
+only as current as that database. The data and our SBOMs are published
+alongside the page.
 
 [`security-report.yml`](.github/workflows/security-report.yml) runs after the
 nightly publish and on changes to [`site/`](site) or

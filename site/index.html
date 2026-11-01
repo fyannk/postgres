@@ -136,7 +136,9 @@
             the Go standard library compiled into any Go binary (grype's default
             skips that). Trivy scans the images themselves. They use different
             vulnerability databases and severity sources, so their counts differ;
-            the gap between ours and upstream is what to compare.
+            the gap between ours and upstream is what to compare. The build time of each
+            scanner's advisory database is shown at the top of the page, and
+            flagged when it is more than two days older than the scan.
           </li>
           <li>
             <strong>"With a fix"</strong> means a fixed version of the affected
