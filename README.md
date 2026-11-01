@@ -1,29 +1,38 @@
 # postgres
 
 ![Upstream](https://img.shields.io/badge/recipe-docker--library%2Fpostgres-1f6feb?style=for-the-badge)
-![No gosu](https://img.shields.io/badge/step--down-setpriv%2C%20no%20gosu-0a7f5a?style=for-the-badge)
+[![Security report](https://img.shields.io/badge/security%20report-nightly-4f6b0e?style=for-the-badge)](https://fyannk.github.io/postgres/)
 
 > The official PostgreSQL image, rebuilt from
-> [docker-library/postgres](https://github.com/docker-library/postgres) with
-> `gosu` replaced by util-linux `setpriv`.
+> [docker-library/postgres](https://github.com/docker-library/postgres) to stay
+> as close to zero known, fixable vulnerabilities as possible, and compared with
+> upstream every night in a public
+> [security report](https://fyannk.github.io/postgres/).
 
 ## Why
 
-The official image ships [`gosu`](https://github.com/tianon/gosu) only to drop
-from root to `postgres` once, at startup. It is a separate Go binary,
-downloaded at build time and pinned to a release, and it carries the Go
-standard library it was compiled with. Scanners report that toolchain's CVEs
-against every image that bundles it, and they stay there until upstream bumps
-`GOSU_VERSION`.
+Most findings in a container image are not in PostgreSQL itself but in the
+distribution packages around it and in anything bundled on top. These images
+keep them down by:
 
-`setpriv` does the same job and is already part of the distribution: on Debian
-it is in `util-linux`, which every image contains anyway, and on Alpine it is
-the small `setpriv` package. It is patched through the normal package updates
-the nightly rebuild applies.
+- **rebuilding when a fix lands**: whenever upstream's recipe or the base
+  image changes, and at least weekly regardless, so Debian and Alpine security
+  updates are picked up without waiting for the next release;
+- **bundling nothing the distribution cannot patch**: the official image
+  downloads [`gosu`](https://github.com/tianon/gosu), a Go binary, only to drop
+  from root to `postgres` at startup. It carries the Go standard library it was
+  compiled with, so scanners report that toolchain's CVEs against every image
+  until upstream bumps `GOSU_VERSION`. Here `setpriv` does the same job: it is
+  part of `util-linux` on Debian and a small package on Alpine, patched like
+  the rest of the distribution;
+- **checking every change before it ships**: builds, behaviour tests and a
+  grype gate, see [How it is verified](#how-it-is-verified);
+- **measuring the result in the open**: SBOMs, a nightly comparison with the
+  official image using two scanners, and every remaining finding listed.
 
 ## What is different
 
-Only the step-down. Every image is built from upstream's own Dockerfile and
+Only the privilege step-down. Every image is built from upstream's own Dockerfile and
 scripts for that version and variant, with three changes applied by
 [`patch-upstream.sh`](.github/scripts/patch-upstream.sh):
 
@@ -125,6 +134,28 @@ findings with an applicable fix that the change introduces; one already in the
 published image is tracked by a nightly-updated issue, and every other finding
 with a fix is published to the repository's code scanning results. See
 [SECURITY.md](SECURITY.md).
+
+## Security report
+
+[fyannk.github.io/postgres](https://fyannk.github.io/postgres/) compares every
+published image with its official counterpart each night, using two scanners.
+Both sides are inventoried with Syft: ours from the SBOM attached when it is
+published, upstream by running Syft on the official image. grype scans those
+SBOMs and Trivy scans the images. For each image, side and scanner, the page
+shows every severity as "with a fix / all findings"; nothing is summed across
+images. It leads with the latest stable release on Debian and Alpine, with
+its trend over time, and lists every tag with the digest it points to.
+The page also records when each scanner's advisory database was built, and
+flags one built more than two days before the scan, since a clean result is
+only as current as that database. The data and our SBOMs are published
+alongside the page.
+
+[`security-report.yml`](.github/workflows/security-report.yml) runs after the
+nightly publish and on changes to [`site/`](site) or
+[`security-report.sh`](.github/scripts/security-report.sh). Upstream's images
+and the Trivy image are pulled through `mirror.gcr.io`, Google's mirror of
+Docker Hub, which serves the same digests without touching Docker Hub's rate
+limits.
 
 ## Release automation
 

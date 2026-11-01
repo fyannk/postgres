@@ -4,8 +4,9 @@
 
 This repository publishes container images. It contains no PostgreSQL code
 and no copy of the image recipe: every image is built from
-[docker-library/postgres](https://github.com/docker-library/postgres) with its
-`gosu` step-down replaced by `setpriv`.
+[docker-library/postgres](https://github.com/docker-library/postgres), rebuilt
+to pick up distribution security fixes, with its `gosu` step-down replaced by
+`setpriv`.
 
 - A flaw in PostgreSQL belongs to the [PostgreSQL project](https://www.postgresql.org/support/security/).
 - A flaw in the official image recipe that this repository merely inherits

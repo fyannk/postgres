@@ -1,0 +1,110 @@
+name: Security report
+
+# Scans every published image next to its official upstream counterpart with
+# grype and Trivy, and publishes the result to GitHub Pages together with the
+# page that explains it (site/). Runs after the nightly publish and image
+# watch, and whenever the page or the report script changes on main.
+
+on:
+  schedule:
+    - cron: "11 5 * * *"
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - site/**
+      - .github/scripts/security-report.sh
+      - .github/scripts/matrix.sh
+      - .github/workflows/security-report.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-report
+  cancel-in-progress: false
+
+env:
+  # Docker Hub images are pulled through Google's mirror, which serves the
+  # same digests without touching Docker Hub's rate limits; the account's
+  # Docker Hub requests are left to the publish.
+  TRIVY_IMAGE: mirror.gcr.io/aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+  UPSTREAM_REPO: mirror.gcr.io/library/postgres
+
+jobs:
+  scan:
+    name: Scan ours and upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+      pages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Install grype
+        id: grype
+        uses: anchore/scan-action/download-grype@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+
+      - name: Install Syft
+        id: syft
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+
+      # Taken from the digest-pinned image rather than a setup action, so the
+      # exact binary is fixed by this file.
+      - name: Install Trivy
+        id: trivy
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/trivy"
+          container="$(docker create "${TRIVY_IMAGE}")"
+          docker cp "${container}:/usr/local/bin/trivy" "${RUNNER_TEMP}/trivy/trivy"
+          docker rm "${container}" >/dev/null
+          echo "cmd=${RUNNER_TEMP}/trivy/trivy" >> "${GITHUB_OUTPUT}"
+
+      - name: Login to GHCR
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Scan and build the report
+        env:
+          REPO: ghcr.io/${{ github.repository_owner }}/postgres
+          GRYPE: ${{ steps.grype.outputs.cmd }}
+          SYFT: ${{ steps.syft.outputs.cmd }}
+          TRIVY: ${{ steps.trivy.outputs.cmd }}
+          GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB: "true"
+          HISTORY_URL: ${{ steps.pages.outputs.base_url }}/data/history.json
+        run: |
+          set -euo pipefail
+          .github/scripts/fetch-upstream.sh upstream >/dev/null
+          .github/scripts/security-report.sh upstream _site
+          cp -R site/. _site/
+
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: _site
+
+  deploy:
+    name: Publish to GitHub Pages
+    needs: scan
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
