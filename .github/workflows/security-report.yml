@@ -83,6 +83,7 @@ jobs:
           TRIVY: ${{ steps.trivy.outputs.cmd }}
           GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB: "true"
           HISTORY_URL: ${{ steps.pages.outputs.base_url }}/data/history.json
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           .github/scripts/fetch-upstream.sh upstream >/dev/null

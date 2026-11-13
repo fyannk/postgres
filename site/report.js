@@ -303,9 +303,14 @@ function renderChart() {
   document.getElementById("trend-note").textContent = `${metric}, one point per nightly scan.`;
   renderLegend(series);
 
+  // The release scanned that night: Debian's, or Alpine's when Debian is
+  // missing. Rows written before versions were recorded have none.
+  const releaseOf = (h) => [stable?.debian, stable?.alpine]
+    .map((image) => image && h.images?.[image.name]?.version).find(Boolean) ?? null;
   const points = state.history
     .map((h) => ({
       date: h.date,
+      version: releaseOf(h),
       values: Object.fromEntries(series.map((s) => [s.id, h.images?.[s.name]?.[s.side]?.[state.scanner]?.[metricKey] ?? null])),
     }))
     .filter((p) => Object.values(p.values).some((v) => v != null));
@@ -323,7 +328,7 @@ function renderChart() {
   const height = Math.round(Math.min(440, Math.max(260, width * 0.3)));
   // Narrow charts drop the end labels for room; the legend names the lines.
   const endLabels = width >= 560;
-  const m = { top: 16, right: endLabels ? 150 : 12, bottom: 28, left: 44 };
+  const m = { top: 22, right: endLabels ? 150 : 12, bottom: 28, left: 44 };
   const plotW = width - m.left - m.right;
   const plotH = height - m.top - m.bottom;
   const values = points.flatMap((p) => Object.values(p.values).filter((v) => v != null));
@@ -331,8 +336,15 @@ function renderChart() {
   const x = (i) => m.left + (i / (points.length - 1)) * plotW;
   const y = (v) => m.top + plotH - (v / yMax) * plotH;
 
+  // The section follows the newest minor release, so every line can jump
+  // where it moves to the next one. Marked at the first scan of that
+  // release: the night the numbers change, not the day it was tagged.
+  const releases = new Map(points.flatMap((p, i) =>
+    i > 0 && p.version && points[i - 1].version && p.version !== points[i - 1].version ? [[i, p.version]] : []));
+  const releaseNote = [...releases.values()].map((v) => ` PostgreSQL ${v} starts where marked.`).join("");
+
   const root = svg("svg", { viewBox: `0 0 ${width} ${height}`, role: "img", tabindex: "0",
-    "aria-label": `${metric} over ${points.length} scans, ${series.map((s) => s.label).join(", ")}. Use the arrow keys to read each scan.` });
+    "aria-label": `${metric} over ${points.length} scans, ${series.map((s) => s.label).join(", ")}.${releaseNote} Use the arrow keys to read each scan.` });
 
   for (let i = 0; i <= 4; i++) {
     const v = (yMax / 4) * i;
@@ -345,6 +357,14 @@ function renderChart() {
   for (const i of ticks) {
     const label = svg("text", { class: "tick", x: x(i), y: height - 8, "text-anchor": i === 0 ? "start" : i === points.length - 1 ? "end" : "middle" });
     label.textContent = shortDate(points[i].date);
+    root.append(label);
+  }
+
+  for (const [i, version] of releases) {
+    root.append(svg("line", { class: "release", x1: x(i), x2: x(i), y1: m.top, y2: m.top + plotH }));
+    const anchor = x(i) + 30 > m.left + plotW ? "end" : x(i) - 30 < m.left ? "start" : "middle";
+    const label = svg("text", { class: "release-label", x: x(i), y: m.top - 8, "text-anchor": anchor });
+    label.textContent = version;
     root.append(label);
   }
 
@@ -403,6 +423,7 @@ function renderChart() {
       el("div", { class: "date", text: shortDate(p.date) }),
       ...series.map((s) => el("div", { class: "row" }, lineKey(s),
         el("strong", { text: p.values[s.id] == null ? "–" : fmt.format(p.values[s.id]) }), s.label)),
+      ...(releases.has(i) ? [el("div", { class: "release-note", text: `First scan of PostgreSQL ${releases.get(i)}` })] : []),
     );
     tooltip.hidden = false;
     const scale = container.clientWidth / width;
