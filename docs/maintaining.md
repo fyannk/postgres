@@ -28,9 +28,12 @@ An image is rebuilt only when an input that can change its contents has moved:
 upstream's directory for that variant, the patch script, or the base image
 digest. That fingerprint is recorded on the image as the
 `io.fyannk.postgres.inputs` label and compared against the published
-`<version>-<variant>` tag. A rebuild happens regardless once the published
-image is more than seven days old, so distribution package fixes are picked up
-with unchanged base images. The upstream commit each image was built from is
+`<version>-<variant>` tag. An image is also rebuilt when the distribution has
+published an update for one of its packages since it was built: each night
+the published image is asked for its pending updates, Debian's own archives
+only on Debian, since PostgreSQL's repository carries server builds the recipe
+deliberately pins. A rebuild happens regardless once the published image is
+more than seven days old, in case that check cannot run. The upstream commit each image was built from is
 recorded as `io.fyannk.postgres.upstream-revision`.
 
 A manual run can pin an upstream commit and force a full rebuild.

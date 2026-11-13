@@ -45,10 +45,11 @@
         </p>
         <ul class="points">
           <li>
-            <strong>Rebuilt when a fix lands.</strong> An image is rebuilt
-            whenever upstream's recipe or the Debian or Alpine base image
-            changes, and at least once a week regardless, so distribution
-            security updates reach it without waiting for the next release.
+            <strong>Rebuilt when a fix lands.</strong> Each night, every
+            image is checked for Debian or Alpine updates published since it
+            was built, and rebuilt the same night with them applied, as it is
+            when upstream's recipe or the base image changes. The official
+            image waits for Docker to rebuild its base.
           </li>
           <li>
             <strong>Nothing bundled that the distribution cannot patch.</strong>
@@ -58,8 +59,8 @@
             every Go advisory published since stays in the image until gosu is
             rebuilt, and distribution updates cannot reach it. Here the same step
             is done by <code>setpriv</code>, part of the distribution's
-            <code>util-linux</code> and patched like the rest. It is the only
-            change made to upstream's recipe.
+            <code>util-linux</code> and patched like the rest. With applying
+            pending updates, it is the only change made to upstream's recipe.
           </li>
           <li>
             <strong>Checked before it ships.</strong> Every change is built,

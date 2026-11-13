@@ -99,9 +99,8 @@ jobs:
           PRIMARY: ${{ matrix.image.version }}-${{ matrix.image.variant }}
           TAGS: ${{ matrix.image.tags }}
           FORCE: ${{ inputs.force || false }}
-          # Upper bound on staleness: rebuild anyway after this long so a
-          # Debian or Alpine package fix with unchanged base images still
-          # gets picked up.
+          # Upper bound on staleness, in case the check for pending
+          # distribution updates below cannot run.
           MAX_IMAGE_AGE_DAYS: "7"
         run: |
           set -euo pipefail
@@ -167,6 +166,29 @@ jobs:
               rebuild=true
             fi
           done
+
+          # A fix the distribution has published since the image was built
+          # triggers a rebuild the same night, rather than at the weekly
+          # rebuild: the build applies pending updates on top of the base. On
+          # Debian only Debian's own archives count; PostgreSQL's repository
+          # carries newer server builds the recipe deliberately pins. If the
+          # check cannot run, the weekly rebuild still applies.
+          if [[ "${rebuild}" == "false" ]]; then
+            # shellcheck disable=SC2016 # runs inside the image
+            pending="$(docker run --rm --pull always --platform linux/amd64 --user root --entrypoint sh \
+              "${REPO}:${PRIMARY}" -c '
+                if command -v apk >/dev/null; then
+                  apk update -q >/dev/null && apk list -u 2>/dev/null
+                else
+                  apt-get update -qq >/dev/null && apt-get -s upgrade | grep "^Inst " | grep -E "\((\S+) Debian(-Security)?:"
+                fi' 2>/dev/null || true)"
+            docker image rm -f "${REPO}:${PRIMARY}" >/dev/null 2>&1 || true
+            if [[ -n "${pending}" ]]; then
+              echo "Distribution updates pending in the published image:"
+              while IFS= read -r line; do echo "  ${line}"; done <<<"${pending}"
+              rebuild=true
+            fi
+          fi
 
           if [[ "${FORCE}" == "true" ]]; then
             rebuild=true
