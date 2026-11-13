@@ -33,6 +33,7 @@ token="$(jq -n --arg id "${DOCKERHUB_USERNAME}" --arg secret "${DOCKERHUB_TOKEN}
   | jq -r '.access_token // empty')"
 [[ -n "${token}" ]] || { echo "Docker Hub authentication failed" >&2; exit 1; }
 auth=(-H "Authorization: Bearer ${token}")
+failures=0
 
 list() {
   local key="" page
@@ -45,25 +46,52 @@ list() {
   done
 }
 
-# prune <jq filter on media_type>: delete untagged manifests older than the
-# cutoff whose media type matches.
+# delete <digest>...: ask Hub to delete these manifests. Hub answers some
+# batches with a server error instead of a per-digest status (seen on
+# 2026-11-13 for image and attestation manifests), so a failed batch is split
+# in half and retried, down to single digests; one Hub still refuses on its
+# own is reported and left for the next run.
+delete() {
+  local response status
+  response="$(mktemp)"
+  status="$(jq -n '{digests: $ARGS.positional}' --args "$@" \
+    | curl -sS -o "${response}" -w '%{http_code}' -X DELETE "${auth[@]}" \
+      -H 'Content-Type: application/json' --data @- "${api}")" || status=000
+  if [[ "${status}" == 2* ]]; then
+    jq -r '.status | to_entries[] | "  \(.key) \(.value.status.status)\(if .value.status.message then ": " + .value.status.message else "" end)"' "${response}"  || failures=$((failures + 1))
+    if jq -e '.status | to_entries | any(.value.status.status != "success" and .value.status.status != "blocked")' "${response}" >/dev/null; then
+      failures=$((failures + 1))
+    fi
+  elif [[ "$#" -gt 1 ]]; then
+    local half=$(($# / 2))
+    echo "  HTTP ${status} for ${#} digests; retrying in two halves"
+    delete "${@:1:half}"
+    delete "${@:half+1}"
+  else
+    echo "  $1 HTTP ${status}: $(head -c 300 "${response}")"
+    failures=$((failures + 1))
+  fi
+  rm -f "${response}"
+}
+
+# prune <jq filter on media_type> <label>: delete untagged manifests older
+# than the cutoff whose media type matches.
 prune() {
-  local kind="$1" label="$2" candidates response
+  local kind="$1" label="$2" candidates
   mapfile -t candidates < <(list | jq -r --arg cutoff "${cutoff}" "
     select((.tags | length) == 0 and .last_pushed < \$cutoff and (.media_type | ${kind}))
     | .manifest_digest")
   echo "${label}: ${#candidates[@]} untagged and older than ${days} days"
   local i
   for ((i = 0; i < ${#candidates[@]}; i += 50)); do
-    response="$(jq -n '{digests: $ARGS.positional}' --args "${candidates[@]:i:50}" \
-      | curl -fsS -X DELETE "${auth[@]}" -H 'Content-Type: application/json' --data @- "${api}")"
-    jq -r '.status | to_entries[] | "  \(.key) \(.value.status.status)\(if .value.status.message then ": " + .value.status.message else "" end)"' <<<"${response}"
-    if jq -e '.status | to_entries | any(.value.status.status != "success" and .value.status.status != "blocked")' <<<"${response}" >/dev/null; then
-      echo "::warning::Some Docker Hub deletions in ${repository} failed; see the log above"
-    fi
+    delete "${candidates[@]:i:50}"
   done
 }
 
 echo "Pruning ${repository}: untagged manifests last pushed before ${cutoff}"
 prune 'test("index|manifest\\.list")' "Indexes"
 prune 'test("index|manifest\\.list") | not' "Image and attestation manifests"
+
+if [[ "${failures}" -gt 0 ]]; then
+  echo "::warning::${failures} Docker Hub deletion(s) in ${repository} failed; see the log above. The next run retries them."
+fi
