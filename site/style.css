@@ -197,6 +197,8 @@ figcaption p { margin: 0.2rem 0 0; }
 .chart .baseline { stroke: var(--axis); stroke-width: 1; }
 .chart .tick { fill: var(--muted); font-family: var(--mono); font-size: 12px; font-variant-numeric: tabular-nums; }
 .chart .end-label { fill: var(--text-2); font-family: var(--mono); font-size: 12px; }
+/* A halo in the card colour keeps labels readable where a release line crosses them. */
+.chart .end-label, .chart .release-label { paint-order: stroke; stroke: var(--surface); stroke-width: 4px; stroke-linejoin: round; }
 .chart .series { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .chart .series.ours { stroke: var(--ours); }
 .chart .series.upstream { stroke: var(--upstream); }
@@ -205,6 +207,8 @@ figcaption p { margin: 0.2rem 0 0; }
 .chart .dot.ours { fill: var(--ours); }
 .chart .dot.upstream { fill: var(--upstream); }
 .chart .crosshair { stroke: var(--axis); stroke-width: 1; }
+.chart .release { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .release-label { fill: var(--text-2); font-family: var(--mono); font-size: 12px; font-weight: 500; }
 .chart .empty { color: var(--text-2); font-size: 0.95rem; padding: 3rem 0; text-align: center; margin: 0; }
 .tooltip {
   position: absolute;
@@ -219,6 +223,7 @@ figcaption p { margin: 0.2rem 0 0; }
 }
 .tooltip[hidden] { display: none; }
 .tooltip .date { color: var(--text-2); margin-bottom: 0.25rem; }
+.tooltip .release-note { color: var(--text-2); margin-top: 0.25rem; }
 .tooltip .row { display: flex; align-items: center; gap: 0.5rem; }
 .tooltip strong { font-family: var(--mono); font-variant-numeric: tabular-nums; }
 .table-view { margin-top: 0.75rem; }

@@ -22,7 +22,8 @@
 # one pull per image rather than one per tool.
 #
 # Expects $REPO (our image repository), $GRYPE, $SYFT and $TRIVY (commands),
-# and optionally $HISTORY_URL and $UPSTREAM_REPO (a mirror of the official
+# and optionally $HISTORY_URL, $GH_TOKEN (for GitHub API calls) and
+# $UPSTREAM_REPO (a mirror of the official
 # image, docker.io/library/postgres by default). Only linux/amd64 is compared, the platform this
 # repository publishes.
 # shellcheck disable=SC2016 # the single-quoted strings are jq programs
@@ -201,14 +202,37 @@ if [[ -n "${HISTORY_URL:-}" ]]; then
       ;;
   esac
 fi
+# Each row records the release every image was that night, so the chart can
+# mark where a new minor release starts. Rows written before that get it from
+# upstream's versions.json as it stood at the nightly scan, once: a failed
+# lookup leaves the row without versions rather than failing the report.
+backfill="${work}/backfill.json"
+echo '{}' > "${backfill}"
+mapfile -t undated < <(jq -r '.[] | select([.images[]? | objects | has("version")] | any | not) | .date' "${history}")
+for day in "${undated[@]}"; do
+  sha="$(curl -fsSL ${GH_TOKEN:+-H "Authorization: Bearer ${GH_TOKEN}"} \
+    "https://api.github.com/repos/docker-library/postgres/commits?path=versions.json&until=${day}T05:11:00Z&per_page=1" \
+    | jq -r '.[0].sha // empty')" || sha=""
+  [[ -n "${sha}" ]] || { echo "::warning::No upstream versions found for ${day}"; continue; }
+  if versions="$(curl -fsSL "https://raw.githubusercontent.com/docker-library/postgres/${sha}/versions.json" \
+      | jq -c 'map_values(.version)')"; then
+    jq --arg day "${day}" --argjson v "${versions}" '.[$day] = $v' "${backfill}" > "${backfill}.tmp"
+    mv "${backfill}.tmp" "${backfill}"
+  fi
+done
+
 # A side that could not be scanned that night is null, so the chart shows a
 # gap instead of a drop to zero.
-jq --slurpfile history "${history}" '
+jq --slurpfile history "${history}" --slurpfile backfill "${backfill}" '
   def counts: if .scans then .scans | map_values({total, fixable}) else null end;
   (.generated[0:10]) as $date
-  | ($history[0] | map(select(.date != $date)))
+  | ($history[0] | map(select(.date != $date))
+     | map(.date as $d | if $backfill[0][$d] then
+         .images |= with_entries(($backfill[0][$d][.key | split("-")[0]]) as $v
+             | if $v and (.value.version | not) then .value.version = $v else . end)
+       else . end))
     + [{date: $date,
-        images: (.images | map({key: .name, value: {ours: (.ours | counts), upstream: (.upstream | counts)}})
+        images: (.images | map({key: .name, value: {version, ours: (.ours | counts), upstream: (.upstream | counts)}})
           | from_entries)}]
   | sort_by(.date) | .[-400:]
 ' "${out}/data/latest.json" > "${out}/data/history.json"
