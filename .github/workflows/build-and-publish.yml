@@ -390,10 +390,12 @@ jobs:
   # have been untagged for a week: an image replaced by a newer push stays
   # pullable by digest long enough for anyone pinning it to move on. Do not
   # enable delete-ghost-images: it can delete tagged release versions.
+  # Runs after the mirror, which reads every GHCR tag: pruning while it runs
+  # deletes signature tags it has listed but not yet copied.
   prune:
     name: Prune replaced GHCR images
-    needs: publish
-    if: always() && needs.publish.result != 'cancelled'
+    needs: [publish, dockerhub]
+    if: always() && needs.publish.result != 'cancelled' && needs.dockerhub.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       packages: write

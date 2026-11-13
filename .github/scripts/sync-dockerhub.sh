@@ -73,8 +73,19 @@ echo "${#tags[@]} tag(s) at ${source}, ${#hub[@]} on docker.io/${target}"
 # Group the tags to copy by the source digest they point to, so each image is
 # copied once with all of its tags.
 declare -A pending=()
+errors="$(mktemp)"
+trap 'rm -f "${errors}"' EXIT
 for tag in "${tags[@]}"; do
-  digest="$(docker buildx imagetools inspect "${source}:${tag}" --format '{{json .Manifest}}' | jq -er .digest)"
+  # A tag deleted since the listing (a replaced image's signature, pruned)
+  # has nothing left to mirror; any other inspect failure stops the run.
+  if ! digest="$(docker buildx imagetools inspect "${source}:${tag}" --format '{{json .Manifest}}' 2>"${errors}" | jq -er .digest)"; then
+    if grep -q 'not found' "${errors}"; then
+      echo "${tag}: deleted from ${source} since the listing, skipped"
+      continue
+    fi
+    cat "${errors}" >&2
+    exit 1
+  fi
   if [[ "${hub[${tag}]:-}" == "${digest}" ]]; then
     echo "${tag}: up to date"
   else
