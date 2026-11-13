@@ -1,11 +1,13 @@
 # What changes compared with the official image
 
-Only the privilege step-down. Every image is built from upstream's own Dockerfile and
-scripts for that version and variant, with three changes applied by
+The privilege step-down, and the distribution's pending updates. Every image
+is built from upstream's own Dockerfile and scripts for that version and
+variant, with these changes applied by
 [`patch-upstream.sh`](../.github/scripts/patch-upstream.sh):
 
 | Upstream | Here |
 | --- | --- |
+| Starts from the base image as Docker last built it | Applies the distribution's pending updates right after `FROM`: `apt-get upgrade` on Debian, before PostgreSQL's own repository is added, and `apk upgrade` on Alpine. PostgreSQL stays at the version the recipe pins |
 | Downloads and verifies `gosu`, sets `ENV GOSU_VERSION` | Removed. Alpine installs the `setpriv` package; Debian already has it |
 | `ln -s gosu su-exec` compatibility link (Alpine, PostgreSQL 14–16) | Removed |
 | `exec gosu postgres "$BASH_SOURCE" "$@"` in `docker-entrypoint.sh` and `docker-ensure-initdb.sh` | `HOME=<postgres home> exec setpriv --reuid=postgres --regid=postgres --init-groups "$BASH_SOURCE" "$@"` |
@@ -44,4 +46,4 @@ setpriv --reuid=postgres --regid=postgres --init-groups <command>
 
 This repository does not fork docker-library/postgres. It carries no copy of
 upstream's Dockerfiles or scripts; it fetches them at build time and rewrites
-only the privilege step-down.
+only the privilege step-down and the update step above.

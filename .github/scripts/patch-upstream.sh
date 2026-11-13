@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Rewrite a docker-library/postgres checkout in place so every image it builds
-# drops privileges with util-linux setpriv instead of gosu.
+# drops privileges with util-linux setpriv instead of gosu, and carries the
+# distribution's pending updates on top of its base image.
 #
 #   .github/scripts/patch-upstream.sh <upstream-checkout> [<major>/<variant> ...]
 #
@@ -73,6 +74,28 @@ patch_dockerfile() {
   mv "${file}.new" "${file}"
 }
 
+# Apply the distribution's pending updates on top of the base image, right
+# after FROM. A fix published in trixie-security or Alpine's repositories then
+# reaches the image the next time it is built, instead of waiting for Docker
+# to rebuild the base. Packages installed later in the recipe come from the
+# same repositories and are already current. On Debian this runs before
+# PostgreSQL's own apt repository is added, so only Debian packages move;
+# PostgreSQL itself stays at the version the recipe pins.
+patch_updates() {
+  local file="$1" variant="$2" upgrade froms
+  case "${variant}" in
+    alpine*) upgrade='RUN set -eux; apk upgrade --no-cache' ;;
+    *) upgrade='RUN set -eux; apt-get update; DEBIAN_FRONTEND=noninteractive apt-get upgrade -y; rm -rf /var/lib/apt/lists/*' ;;
+  esac
+  froms="$(grep -c '^FROM ' "${file}" || true)"
+  if [[ "${froms}" != "1" ]]; then
+    echo "${file}: expected exactly one FROM, found ${froms}" >&2
+    return 1
+  fi
+  UPGRADE="${upgrade}" perl -pi -e 'if (/^FROM /) { $_ .= "\n# apply the distribution'"'"'s pending updates to the base image\n$ENV{UPGRADE}\n" }' "${file}"
+  grep -qxF "${upgrade}" "${file}"
+}
+
 patch_script() {
   local file="$1" before
   # shellcheck disable=SC2016 # a literal pattern, not an expansion
@@ -89,6 +112,7 @@ for dir in "$@"; do
   [[ -f "${dir}/Dockerfile" ]] || { echo "${dir}: no Dockerfile" >&2; exit 1; }
 
   patch_dockerfile "${dir}/Dockerfile" "${variant}"
+  patch_updates "${dir}/Dockerfile" "${variant}"
   for script in docker-entrypoint.sh docker-ensure-initdb.sh; do
     if [[ -f "${dir}/${script}" ]]; then
       patch_script "${dir}/${script}"

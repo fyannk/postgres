@@ -18,7 +18,8 @@ to pick up distribution security fixes, with its `gosu` step-down replaced by
 ## Supported versions
 
 Every PostgreSQL major and variant upstream currently maintains is rebuilt
-nightly when its inputs change, and at least weekly otherwise. Once upstream
+nightly when its inputs change or Debian or Alpine have published an update
+for one of its packages, and at least weekly otherwise. Once upstream
 drops a major or a base, its tags here stop being rebuilt.
 
 ## Reporting a vulnerability
