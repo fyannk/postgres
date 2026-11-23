@@ -101,7 +101,7 @@ if [[ "${DRY_RUN:-}" == "true" ]]; then
   exit 0
 fi
 
-failed=0
+declare -A uncopied=()
 for digest in "${!pending[@]}"; do
   args=()
   for tag in ${pending[${digest}]}; do
@@ -122,21 +122,35 @@ for digest in "${!pending[@]}"; do
   echo "::endgroup::"
   if [[ "${copied}" != "true" ]]; then
     echo "::error::Could not copy ${digest} to docker.io/${target}; the next run retries it"
-    failed=$((failed + 1))
+    uncopied["${digest}"]=1
   fi
 done
 
-# Confirm through the Hub API, which costs no registry request.
-read_hub
-wrong=0
-for digest in "${!pending[@]}"; do
-  for tag in ${pending[${digest}]}; do
-    if [[ "${hub[${tag}]:-}" != "${digest}" ]]; then
-      echo "::error::docker.io/${target}:${tag} is ${hub[${tag}]:-missing}, expected ${digest}"
-      wrong=$((wrong + 1))
-    fi
+# Confirm through the Hub API, which costs no registry request. Its listing
+# can trail a push by some seconds, so tags that do not match yet are read
+# again before they count as wrong. Images whose copy failed are already
+# reported, and no wait would bring them.
+checks=5
+for ((check = 1; ; check++)); do
+  read_hub
+  wrong=()
+  for digest in "${!pending[@]}"; do
+    [[ -z "${uncopied[${digest}]:-}" ]] || continue
+    for tag in ${pending[${digest}]}; do
+      if [[ "${hub[${tag}]:-}" != "${digest}" ]]; then
+        wrong+=("docker.io/${target}:${tag} is ${hub[${tag}]:-missing}, expected ${digest}")
+      fi
+    done
   done
+  if [[ "${#wrong[@]}" -eq 0 || "${check}" -ge "${checks}" ]]; then
+    break
+  fi
+  echo "${#wrong[@]} tag(s) not listed as copied yet (check ${check}/${checks}); reading again in $((check * 10))s"
+  sleep $((check * 10))
+done
+for mismatch in "${wrong[@]}"; do
+  echo "::error::${mismatch}"
 done
 
-echo "Mirrored ${#pending[@]} image(s)."
-[[ "${failed}" -eq 0 && "${wrong}" -eq 0 ]]
+echo "Mirrored $((${#pending[@]} - ${#uncopied[@]})) image(s)."
+[[ "${#uncopied[@]}" -eq 0 && "${#wrong[@]}" -eq 0 ]]
