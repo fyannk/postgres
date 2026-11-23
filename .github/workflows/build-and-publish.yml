@@ -289,7 +289,9 @@ jobs:
       # Sigstore's public transparency log. The signature covers the index
       # digest, and through it the image, its SBOM and its provenance. It is
       # made before the tags move, so no tag ever serves an unsigned image,
-      # and checked the way users are told to check it.
+      # and checked the way users are told to check it. The registry can take
+      # a few seconds to serve a signature it has just accepted, so the check
+      # is retried with a growing pause before it fails the job.
       - name: Sign the verified image
         if: steps.decide.outputs.rebuild == 'true'
         env:
@@ -298,11 +300,22 @@ jobs:
           IDENTITY: ${{ github.server_url }}/${{ github.workflow_ref }}
         run: |
           set -euo pipefail
+          attempts=5
           for target in ${REPOS}; do
             cosign sign --yes "${target}@${DIGEST}"
-            cosign verify "${target}@${DIGEST}" \
-              --certificate-identity "${IDENTITY}" \
-              --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null
+            for ((attempt = 1; ; attempt++)); do
+              if cosign verify "${target}@${DIGEST}" \
+                --certificate-identity "${IDENTITY}" \
+                --certificate-oidc-issuer https://token.actions.githubusercontent.com >/dev/null; then
+                break
+              fi
+              if ((attempt >= attempts)); then
+                echo "::error::${target}@${DIGEST} has no signature from ${IDENTITY} after ${attempts} checks."
+                exit 1
+              fi
+              echo "Signature not verifiable yet (check ${attempt}/${attempts}), retrying in $((attempt * 10))s."
+              sleep $((attempt * 10))
+            done
             echo "${target}@${DIGEST} is signed by ${IDENTITY}."
           done
 
