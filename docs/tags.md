@@ -25,6 +25,15 @@ docker pull fyannk/postgres:18
 Images are published to GHCR and Docker Hub, for `linux/amd64`. A tag
 resolves to the same image digest on either.
 
+## Obsolete tags
+
+These tags are still there, so that nothing that pins them breaks, but they are
+no longer rebuilt and their known vulnerabilities only grow. Do not use them.
+
+| Tags | Obsolete since | Use instead |
+| --- | --- | --- |
+| `14`, `14.*`, `14-*` | 2026-11-12, PostgreSQL 14's end of life | `15` or later, ideally `18` |
+
 ## Verifying an image
 
 Every image is signed with [cosign](https://github.com/sigstore/cosign),
