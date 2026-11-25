@@ -96,3 +96,64 @@ jobs:
           else
             gh issue create --title "${title}" --body "${body}"
           fi
+
+  # CI uploads to code scanning only on a pull request or a push, so without
+  # this an advisory filed between two pushes would not show on the Security
+  # tab until the next one.
+  matrix:
+    name: List the images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - id: matrix
+        run: |
+          set -euo pipefail
+          .github/scripts/fetch-upstream.sh upstream >/dev/null
+          echo "matrix=$(.github/scripts/matrix.sh upstream)" >> "${GITHUB_OUTPUT}"
+
+  code-scanning:
+    name: Fixable findings to code scanning (${{ matrix.image.dir }})
+    needs: matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.matrix.outputs.matrix) }}
+    env:
+      IMAGE: postgres-ci:${{ matrix.image.version }}-${{ matrix.image.variant }}
+      GRYPE_MATCH_GOLANG_ALWAYS_USE_CPE_FOR_STDLIB: "true"
+    steps:
+      # Scanned under the name CI gives its build, and uploaded under CI's
+      # category, so that a finding CI reported keeps its alert instead of
+      # getting a second one.
+      - name: Pull the published image
+        env:
+          PUBLISHED: ghcr.io/${{ github.repository_owner }}/postgres:${{ matrix.image.major }}-${{ matrix.image.variant }}
+        run: |
+          set -euo pipefail
+          docker pull --quiet "${PUBLISHED}"
+          docker tag "${PUBLISHED}" "${IMAGE}"
+
+      - name: Fixable findings
+        id: full
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: ${{ env.IMAGE }}
+          fail-build: false
+          only-fixed: true
+          output-format: sarif
+
+      - name: Publish to code scanning
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4
+        with:
+          sarif_file: ${{ steps.full.outputs.sarif }}
+          category: grype-${{ matrix.image.major }}-${{ matrix.image.variant }}
