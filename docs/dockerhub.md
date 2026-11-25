@@ -47,6 +47,9 @@ image maintains, on Debian and Alpine, for `linux/amd64`. The images are also
 on GitHub Container Registry as `ghcr.io/fyannk/postgres`, with the same
 digests. [All tags](https://github.com/fyannk/postgres/blob/main/docs/tags.md).
 
+**Obsolete:** every `14` tag. PostgreSQL 14 reached its end of life on
+2026-11-12; the tags remain but are no longer rebuilt.
+
 ## Learn more
 
 - [Security report](https://fyannk.github.io/postgres/): the nightly comparison, image by image.
